@@ -1,0 +1,59 @@
+# How to query and visualize data from Google BigQuery using Livebook
+
+```elixir
+Mix.install([
+  {:kino_db, "~> 0.1.2"},
+  {:req_bigquery, "~> 0.1.0"},
+  {:kino_vega_lite, "~> 0.1.1"}
+])
+```
+
+## Creating and configuring a connection to Google BigQuery
+
+There are two parameters needed to configure a connection to Google BigQuery:
+
+* Google cloud project ID
+* A JSON file with your service account credentials
+
+To run this notebook, **you'll need to provide your configurations**. If you need help with that, you [can follow this guide](https://cloud.google.com/docs/authentication/getting-started).
+
+<!-- livebook:{"attrs":{"credentials":{},"default_dataset_id":"","project_id":"","type":"bigquery","variable":"conn"},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
+
+```elixir
+
+```
+
+## Querying a Google BigQuery dataset
+
+After you have configured your connection, you can use that connection to query a Google BigQuery dataset.
+
+Google BigQuery provides multiple public datasets. We'll use one of those in this example.
+
+<!-- livebook:{"attrs":{"connection":{"type":"bigquery","variable":"conn"},"query":"select t.year, t.country_name, t.midyear_population\nfrom bigquery-public-data.census_bureau_international.midyear_population as t\nwhere year < 2022\norder by year","result_variable":"result","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
+
+```elixir
+result =
+  Req.post!(conn,
+    bigquery:
+      {"""
+       select t.year, t.country_name, t.midyear_population
+       from bigquery-public-data.census_bureau_international.midyear_population as t
+       where year < 2022
+       order by year
+       """, []}
+  ).body
+```
+
+## Visualizing the data
+
+The dataset we queried has the yearly population numbers from multiple countries worldwide. We'll create a chart to visualize how the world population is changing over the years.
+
+<!-- livebook:{"attrs":{"chart_title":"World population","height":null,"layers":[{"chart_type":"bar","color_field":null,"color_field_aggregate":null,"color_field_type":null,"data_variable":"result","x_field":"year","x_field_aggregate":null,"x_field_type":"quantitative","y_field":"midyear_population","y_field_aggregate":"sum","y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":700},"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+
+```elixir
+VegaLite.new(width: 700, title: "World population")
+|> VegaLite.data_from_values(result, only: ["year", "midyear_population"])
+|> VegaLite.mark(:bar)
+|> VegaLite.encode_field(:x, "year", type: :quantitative)
+|> VegaLite.encode_field(:y, "midyear_population", type: :quantitative, aggregate: :sum)
+```
