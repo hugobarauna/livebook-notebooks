@@ -1,0 +1,74 @@
+# How to query and visualize data from Amazon Athena using Livebook
+
+```elixir
+Mix.install([
+  {:kino_db, "~> 0.1.2"},
+  {:req_athena, "~> 0.1.0"},
+  {:kino_maplibre, "~> 0.1.3"}
+])
+```
+
+## Connecting to Amazon Athena using the Database connection Smart cell
+
+<!-- livebook:{"attrs":{"access_key_id":"","database":"","output_location":"","region":"us-east-1","secret_access_key":"","token":"","type":"athena","variable":"conn","workgroup":""},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
+
+```elixir
+
+```
+
+## Querying Amazon Athena using the SQL Query Smart cell
+
+<!-- livebook:{"attrs":{"cache_query":true,"connection":{"type":"athena","variable":"conn"},"query":"CREATE EXTERNAL TABLE stations (\n  station_id string, \n  latitude double, \n  longitude double, \n  elevation double,\n  name string)\nROW FORMAT SERDE \n  'org.apache.hadoop.hive.serde2.RegexSerDe' \nWITH SERDEPROPERTIES ( \n  'input.regex'='([^ ]*) *([^ ]*) *([^ ]*) *([^ ]*) *(.+)$') \nSTORED AS INPUTFORMAT \n  'org.apache.hadoop.mapred.TextInputFormat' \nOUTPUTFORMAT \n  'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'\nLOCATION\n  's3://livebook-blog/amazon-athena-integration'\nTBLPROPERTIES (\n  'typeOfData'='file')","result_variable":"result","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
+
+```elixir
+result =
+  Req.post!(conn,
+    athena:
+      {"""
+       CREATE EXTERNAL TABLE stations (
+         station_id string, 
+         latitude double, 
+         longitude double, 
+         elevation double,
+         name string)
+       ROW FORMAT SERDE 
+         'org.apache.hadoop.hive.serde2.RegexSerDe' 
+       WITH SERDEPROPERTIES ( 
+         'input.regex'='([^ ]*) *([^ ]*) *([^ ]*) *([^ ]*) *(.+)$') 
+       STORED AS INPUTFORMAT 
+         'org.apache.hadoop.mapred.TextInputFormat' 
+       OUTPUTFORMAT 
+         'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+       LOCATION
+         's3://livebook-blog/amazon-athena-integration'
+       TBLPROPERTIES (
+         'typeOfData'='file')
+       """, []},
+    cache_query: true
+  ).body
+```
+
+<!-- livebook:{"attrs":{"cache_query":true,"connection":{"type":"athena","variable":"conn"},"query":"select * from stations order by station_id","result_variable":"result2","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
+
+```elixir
+result2 =
+  Req.post!(conn,
+    athena: {"select * from stations order by station_id", []},
+    cache_query: true
+  ).body
+```
+
+## Visualizing geographic coordinates data using the Map Smart cell
+
+<!-- livebook:{"attrs":{"center":null,"layers":[{"cluster_colors":["#51bbd6","#f1f075","#f28cb1"],"cluster_max":750,"cluster_min":100,"coordinates_format":"columns","layer_color":"#000000","layer_id":"stations","layer_opacity":1,"layer_radius":5,"layer_source":"result2","layer_type":"circle","source_coordinates":null,"source_latitude":"latitude","source_longitude":"longitude","source_type":"table"}],"ml_alias":"Elixir.MapLibre","style":"default","zoom":0},"kind":"Elixir.KinoMapLibre.MapCell","livebook_object":"smart_cell"} -->
+
+```elixir
+MapLibre.new()
+|> MapLibre.add_table_source("result2", result2, {:lng_lat, ["longitude", "latitude"]})
+|> MapLibre.add_layer(
+  id: "stations",
+  source: "result2",
+  type: :circle,
+  paint: [circle_color: "#000000", circle_radius: 5, circle_opacity: 1]
+)
+```
