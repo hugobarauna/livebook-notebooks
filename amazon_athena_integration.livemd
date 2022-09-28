@@ -8,6 +8,10 @@ Mix.install([
 ])
 ```
 
+## Accompanying resources
+
+This notebook has an [accompanying blog post](https://news.livebook.dev/how-to-query-and-visualize-data-from-amazon-athena-using-livebook-4dfQ5y) with step-by-step details on how to use the notebook, if you have any doubts.
+
 ## Connecting to Amazon Athena using the Database connection Smart cell
 
 <!-- livebook:{"attrs":{"access_key_id":"","database":"","output_location":"","region":"us-east-1","secret_access_key":"","token":"","type":"athena","variable":"conn","workgroup":""},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
