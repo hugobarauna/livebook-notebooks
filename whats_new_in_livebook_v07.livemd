@@ -1,0 +1,263 @@
+# What's new in Livebook v0.7
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.7.0"},
+  {:kino_db, "~> 0.2.0"},
+  {:explorer, "~> 0.3.1"},
+  {:req, "~> 0.3.1"},
+  {:postgrex, "~> 0.16.5"},
+  {:req_athena, "~> 0.1.1"}
+])
+```
+
+## Intro
+
+This is an accompanying notebook to the Livebook v0.7 announcement blog post.
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Secrets
+
+#### Secrets inside Code cells
+
+<!-- livebook:{"break_markdown":true} -->
+
+You should not hardcode passwords, API tokens, and sensitive data in your code or notebook like this:
+
+```elixir
+api_username = "postman"
+api_password = "password"
+
+Req.get!("https://postman-echo.com/basic-auth", auth: {api_username, api_password})
+```
+
+To deal with sensitive data, Livebook has a feature called Secrets.
+
+You can add a secret using the Secrets menu on the side.
+
+Once you have created a secret, you can use it using the `System.fetch_env!/1`, adding a **"LB_"** namespace to the name of the secret you created.
+
+For example, let's say you create a secret with the name `API_USERNAME`. You can call that secret from your code like this:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+api_username = System.fetch_env!("LB_API_USERNAME")
+```
+
+```elixir
+api_username = System.fetch_env!("LB_API_USERNAME")
+api_password = System.fetch_env!("LB_API_PASSWORD")
+
+Req.get!("https://postman-echo.com/basic-auth", auth: {api_username, api_password})
+```
+
+#### Secrets inside Database Connection Smart cell
+
+<!-- livebook:{"break_markdown":true} -->
+
+The new Secrets feature is integrated with Database Connection Smart cells.
+
+So, when you're creating a connection to PostgreSQL or Amazon Athena, Livebook will give you the option to use a Secret for the database password.
+
+<!-- livebook:{"break_markdown":true} -->
+
+To see how that works, evaluate the following cell and click in the **Password** field in the form below:
+
+<!-- livebook:{"attrs":{},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
+
+```elixir
+opts = [hostname: "localhost", port: 5432, username: "", password: "", database: ""]
+{:ok, conn} = Kino.start_child({Postgrex, opts})
+```
+
+Or, evaluate the following cell and click in the **Secret Access Key** field in the form below:
+
+<!-- livebook:{"attrs":{"access_key_id":"","database":"","output_location":"","region":"us-east-1","secret_access_key_secret":"","token":"","type":"athena","variable":"conn2","workgroup":""},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
+
+```elixir
+
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Visualize message passing among processes
+
+### An example of visualizing two processes exchanging a few messages
+
+<!-- livebook:{"break_markdown":true} -->
+
+Let's say you want to visualize how that piece of code is exchanging messages when it runs:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+parent = self()
+
+child =
+  spawn(fn ->
+    receive do
+      :ping -> send(parent, :pong)
+    end
+  end)
+
+send(child, :ping)
+
+receive do
+  :pong -> :ponged!
+end
+```
+
+All you need to do is wrap your code with `Kino.Process.render_seq_trace/2`:
+
+```elixir
+parent = self()
+
+Kino.Process.render_seq_trace(fn ->
+  child =
+    spawn(fn ->
+      receive do
+        :ping -> send(parent, :pong)
+      end
+    end)
+
+  send(child, :ping)
+
+  receive do
+    :pong -> :ponged!
+  end
+end)
+```
+
+### An example of visualizing more than two processes exchanging lots of messages
+
+```elixir
+Kino.Process.render_seq_trace(fn ->
+  1..2
+  |> Task.async_stream(fn i ->
+    Process.sleep(Enum.random(100..300))
+    i
+  end)
+  |> Stream.run()
+end)
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Visualize supervision trees
+
+To visualize a supervision tree, call `Kino.Process.render_sup_tree/2` with the supervisor’s PID:
+
+```elixir
+{:ok, supervisor_pid} =
+  Supervisor.start_link(
+    [
+      {Task, fn -> Process.sleep(:infinity) end},
+      {Agent, fn -> [] end}
+    ],
+    strategy: :one_for_one
+  )
+
+Kino.Process.render_sup_tree(supervisor_pid)
+```
+
+### Automatic detection of a supervisor through its PID
+
+<!-- livebook:{"break_markdown":true} -->
+
+Livebook will also automatically show you a supervision tree if the last line in your code cell is the PID of a supervisor:
+
+```elixir
+{:ok, supervisor_pid} =
+  Supervisor.start_link(
+    [
+      {Task, fn -> Process.sleep(:infinity) end},
+      {Agent, fn -> [] end}
+    ],
+    strategy: :one_for_one
+  )
+```
+
+```elixir
+supervisor_pid
+```
+
+### Automatic detection of an application tree through its atom
+
+<!-- livebook:{"break_markdown":true} -->
+
+Given the name of an application as an atom, Livebook will automatically render the application tree:
+
+```elixir
+:kino
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Visualize and interact with pipelines using dbg
+
+**An example of using Livebook's dgb interactive user interface with a simple pipeline**
+
+```elixir
+"Elixir is cool!"
+|> String.trim_trailing("!")
+|> String.split()
+|> List.first()
+|> dbg()
+```
+
+**An example of using Livebook's dgb interactive user interface with a pipeline that is doing some data analysis**
+
+```elixir
+alias Explorer.DataFrame
+alias Explorer.Series
+
+Explorer.Datasets.iris()
+|> DataFrame.filter_with(&Series.equal(&1["species"], "Iris-virginica"))
+|> DataFrame.select(["sepal_length", "sepal_width", "petal_length", "petal_width"])
+|> DataFrame.arrange(desc: "sepal_width")
+|> DataFrame.rename(["sepal length", "sepal width", "petal lenght", "petal width"])
+|> DataFrame.to_rows()
+|> dbg()
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Organize your cell output with a tabs layout
+
+```elixir
+data = [
+  %{id: 1, name: "Elixir", website: "https://elixir-lang.org"},
+  %{id: 2, name: "Erlang", website: "https://www.erlang.org"}
+]
+
+Kino.Layout.tabs(
+  Table: Kino.DataTable.new(data),
+  Raw: data
+)
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Organize your cell output with a grid layout
+
+```elixir
+urls = [
+  "https://images.unsplash.com/photo-1603203040743-24aced6793b4?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=580&h=580&q=80",
+  "https://images.unsplash.com/photo-1578339850459-76b0ac239aa2?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=580&h=580&q=80",
+  "https://images.unsplash.com/photo-1633479397973-4e69efa75df2?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=580&h=580&q=80",
+  "https://images.unsplash.com/photo-1597838816882-4435b1977fbe?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=580&h=580&q=80",
+  "https://images.unsplash.com/photo-1629778712393-4f316eee143e?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=580&h=580&q=80",
+  "https://images.unsplash.com/photo-1638667168629-58c2516fbd22?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=580&h=580&q=80"
+]
+
+images =
+  for {url, i} <- Enum.with_index(urls, 1) do
+    image = Kino.Markdown.new("![](#{url})")
+    label = Kino.Markdown.new("**Image #{i}**")
+    Kino.Layout.grid([image, label], boxed: true)
+  end
+
+Kino.Layout.grid(images, columns: 3)
+```
