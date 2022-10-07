@@ -74,7 +74,7 @@ opts = [hostname: "localhost", port: 5432, username: "", password: "", database:
 
 Or, evaluate the following cell and click in the **Secret Access Key** field in the form below:
 
-<!-- livebook:{"attrs":{"access_key_id":"","database":"","output_location":"","region":"us-east-1","secret_access_key_secret":"","token":"","type":"athena","variable":"conn2","workgroup":""},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":{"access_key_id":"some_access_key","database":"some_database","output_location":"","region":"us-east-1","secret_access_key_secret":"","token":"","type":"athena","variable":"conn2","workgroup":""},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 
