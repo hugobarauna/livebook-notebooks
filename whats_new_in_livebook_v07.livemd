@@ -1,17 +1,14 @@
 # What's new in Livebook v0.7
 
 ```elixir
-Mix.install(
-  [
-    {:kino, "~> 0.7.0"},
-    {:kino_db, "~> 0.2.0"},
-    {:explorer, "~> 0.3.1"},
-    {:req, "~> 0.3.1"},
-    {:postgrex, "~> 0.16.5"},
-    {:req_athena, "~> 0.1.1"}
-  ],
-
-)
+Mix.install([
+  {:kino, "~> 0.7.0"},
+  {:kino_db, "~> 0.2.0"},
+  {:explorer, "~> 0.3.1"},
+  {:req, "~> 0.3.1"},
+  {:postgrex, "~> 0.16.5"},
+  {:req_athena, "~> 0.1.1"}
+])
 ```
 
 ## Intro
@@ -51,9 +48,9 @@ api_username = System.fetch_env!("LB_API_USERNAME")
 
 <!-- livebook:{"break_markdown":true} -->
 
-Livebook will automatically detect when your code is trying to use a secret that was not set up before.
+Livebook will automatically detect when your code is trying to use a secret that was not setted up before.
 
-For example, if you evaluate the cell below and the `API_USERNAME` or `API_PASSWORD` secret was not set up, Livebook will ask you to create that secret.
+For example, if you evaluate the cell below and the `API_USERNAME` or `API_PASSWORD` secret were not setted up, Livebook you ask you to create that secret.
 
 You can create those secrets with the following value and evaluate the cell below again:
 
