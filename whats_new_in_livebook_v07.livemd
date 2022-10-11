@@ -1,14 +1,17 @@
 # What's new in Livebook v0.7
 
 ```elixir
-Mix.install([
-  {:kino, "~> 0.7.0"},
-  {:kino_db, "~> 0.2.0"},
-  {:explorer, "~> 0.3.1"},
-  {:req, "~> 0.3.1"},
-  {:postgrex, "~> 0.16.5"},
-  {:req_athena, "~> 0.1.1"}
-])
+Mix.install(
+  [
+    {:kino, "~> 0.7.0"},
+    {:kino_db, "~> 0.2.0"},
+    {:explorer, "~> 0.3.1"},
+    {:req, "~> 0.3.1"},
+    {:postgrex, "~> 0.16.5"},
+    {:req_athena, "~> 0.1.1"}
+  ],
+
+)
 ```
 
 ## Intro
@@ -17,13 +20,13 @@ This is an accompanying notebook to the Livebook v0.7 announcement blog post.
 
 <!-- livebook:{"branch_parent_index":0} -->
 
-## Secrets
+## Secrets management
 
 #### Secrets inside Code cells
 
 <!-- livebook:{"break_markdown":true} -->
 
-You should not hardcode passwords, API tokens, and sensitive data in your code or notebook like this:
+We know we should not hardcode passwords, API tokens, and sensitive data in our code or notebook like this:
 
 ```elixir
 api_username = "postman"
@@ -34,7 +37,7 @@ Req.get!("https://postman-echo.com/basic-auth", auth: {api_username, api_passwor
 
 To deal with sensitive data, Livebook has a feature called Secrets.
 
-You can add a secret using the Secrets menu on the side.
+You can add a secret using the Secrets menu on the sidebar.
 
 Once you have created a secret, you can use it using the `System.fetch_env!/1`, adding a **"LB_"** namespace to the name of the secret you created.
 
@@ -45,6 +48,17 @@ For example, let's say you create a secret with the name `API_USERNAME`. You can
 ```elixir
 api_username = System.fetch_env!("LB_API_USERNAME")
 ```
+
+<!-- livebook:{"break_markdown":true} -->
+
+Livebook will automatically detect when your code is trying to use a secret that was not set up before.
+
+For example, if you evaluate the cell below and the `API_USERNAME` or `API_PASSWORD` secret was not set up, Livebook will ask you to create that secret.
+
+You can create those secrets with the following value and evaluate the cell below again:
+
+* `API_USERNAME`: postman
+* `API_PASSWORD`: password
 
 ```elixir
 api_username = System.fetch_env!("LB_API_USERNAME")
@@ -65,10 +79,17 @@ So, when you're creating a connection to PostgreSQL or Amazon Athena, Livebook w
 
 To see how that works, evaluate the following cell and click in the **Password** field in the form below:
 
-<!-- livebook:{"attrs":{},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":{"database":"","hostname":"localhost","password":"","port":5432,"type":"postgres","use_ipv6":false,"username":"postgres","variable":"conn"},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
 
 ```elixir
-opts = [hostname: "localhost", port: 5432, username: "", password: "", database: ""]
+opts = [
+  hostname: "localhost",
+  port: 5432,
+  username: "postgres",
+  password: "",
+  database: ""
+]
+
 {:ok, conn} = Kino.start_child({Postgrex, opts})
 ```
 
@@ -82,7 +103,7 @@ Or, evaluate the following cell and click in the **Secret Access Key** field in 
 
 <!-- livebook:{"branch_parent_index":0} -->
 
-## Visualize message passing among processes
+## Visual representations of the running system
 
 ### An example of visualizing two processes exchanging a few messages
 
@@ -112,9 +133,9 @@ end
 All you need to do is wrap your code with `Kino.Process.render_seq_trace/2`:
 
 ```elixir
-parent = self()
-
 Kino.Process.render_seq_trace(fn ->
+  parent = self()
+
   child =
     spawn(fn ->
       receive do
@@ -130,22 +151,21 @@ Kino.Process.render_seq_trace(fn ->
 end)
 ```
 
-### An example of visualizing more than two processes exchanging lots of messages
+### An example of visualizing more than two processes exchanging messages
 
 ```elixir
 Kino.Process.render_seq_trace(fn ->
-  1..2
+  1..4
   |> Task.async_stream(fn i ->
-    Process.sleep(Enum.random(100..300))
     i
   end)
   |> Stream.run()
 end)
 ```
 
-<!-- livebook:{"branch_parent_index":0} -->
+### Visualize supervision trees
 
-## Visualize supervision trees
+<!-- livebook:{"break_markdown":true} -->
 
 To visualize a supervision tree, call `Kino.Process.render_sup_tree/2` with the supervisor’s PID:
 
@@ -195,7 +215,7 @@ Given the name of an application as an atom, Livebook will automatically render 
 
 <!-- livebook:{"branch_parent_index":0} -->
 
-## Visualize and interact with pipelines using dbg
+## Interactive user interface to visualize and edit Elixir pipelines
 
 **An example of using Livebook's dgb interactive user interface with a simple pipeline**
 
@@ -224,7 +244,9 @@ Explorer.Datasets.iris()
 
 <!-- livebook:{"branch_parent_index":0} -->
 
-## Organize your cell output with a tabs layout
+## Organize your cell output with layouts
+
+#### Tabs layout
 
 ```elixir
 data = [
@@ -238,9 +260,7 @@ Kino.Layout.tabs(
 )
 ```
 
-<!-- livebook:{"branch_parent_index":0} -->
-
-## Organize your cell output with a grid layout
+#### Grid layout
 
 ```elixir
 urls = [
