@@ -2,9 +2,9 @@
 
 ```elixir
 Mix.install([
-  {:kino_db, "~> 0.1.2"},
-  {:req_athena, "~> 0.1.0"},
-  {:kino_maplibre, "~> 0.1.3"}
+  {:kino_db, "~> 0.2.0"},
+  {:req_athena, "~> 0.1.1"},
+  {:kino_maplibre, "~> 0.1.4"}
 ])
 ```
 
@@ -14,7 +14,7 @@ This notebook has an [accompanying blog post](https://news.livebook.dev/how-to-q
 
 ## Connecting to Amazon Athena using the Database connection Smart cell
 
-<!-- livebook:{"attrs":{"access_key_id":"","database":"","output_location":"","region":"us-east-1","secret_access_key":"","token":"","type":"athena","variable":"conn","workgroup":""},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":{"access_key_id":"","database":"default","output_location":"","region":"us-east-1","secret_access_key_secret":"AWS_SECRET_ACCESS_KEY","token":"","type":"athena","variable":"conn","workgroup":""},"kind":"Elixir.KinoDB.ConnectionCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 
@@ -22,14 +22,14 @@ This notebook has an [accompanying blog post](https://news.livebook.dev/how-to-q
 
 ## Querying Amazon Athena using the SQL Query Smart cell
 
-<!-- livebook:{"attrs":{"cache_query":true,"connection":{"type":"athena","variable":"conn"},"query":"CREATE EXTERNAL TABLE stations (\n  station_id string, \n  latitude double, \n  longitude double, \n  elevation double,\n  name string)\nROW FORMAT SERDE \n  'org.apache.hadoop.hive.serde2.RegexSerDe' \nWITH SERDEPROPERTIES ( \n  'input.regex'='([^ ]*) *([^ ]*) *([^ ]*) *([^ ]*) *(.+)$') \nSTORED AS INPUTFORMAT \n  'org.apache.hadoop.mapred.TextInputFormat' \nOUTPUTFORMAT \n  'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'\nLOCATION\n  's3://livebook-blog/amazon-athena-integration'\nTBLPROPERTIES (\n  'typeOfData'='file')","result_variable":"result","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":{"cache_query":true,"connection":{"type":"athena","variable":"conn"},"query":"CREATE EXTERNAL TABLE IF NOT EXISTS stations  (\n  station_id string, \n  latitude double, \n  longitude double, \n  elevation double,\n  name string)\nROW FORMAT SERDE \n  'org.apache.hadoop.hive.serde2.RegexSerDe' \nWITH SERDEPROPERTIES ( \n  'input.regex'='([^ ]*) *([^ ]*) *([^ ]*) *([^ ]*) *(.+)$') \nSTORED AS INPUTFORMAT \n  'org.apache.hadoop.mapred.TextInputFormat' \nOUTPUTFORMAT \n  'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'\nLOCATION\n  's3://livebook-blog/amazon-athena-integration'\nTBLPROPERTIES (\n  'typeOfData'='file')","result_variable":"result","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 result =
   Req.post!(conn,
     athena:
       {"""
-       CREATE EXTERNAL TABLE stations (
+       CREATE EXTERNAL TABLE IF NOT EXISTS stations  (
          station_id string, 
          latitude double, 
          longitude double, 
