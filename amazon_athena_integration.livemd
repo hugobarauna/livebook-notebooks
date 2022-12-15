@@ -44,7 +44,7 @@ result =
        OUTPUTFORMAT 
          'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
        LOCATION
-         's3://livebook-blog/amazon-athena-integration'
+         's3://livebook-blog/amazon-athena-integration/'
        TBLPROPERTIES (
          'typeOfData'='file')
        """, []},
