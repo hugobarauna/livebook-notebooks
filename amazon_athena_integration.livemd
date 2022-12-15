@@ -22,7 +22,7 @@ This notebook has an [accompanying blog post](https://news.livebook.dev/how-to-q
 
 ## Querying Amazon Athena using the SQL Query Smart cell
 
-<!-- livebook:{"attrs":{"cache_query":true,"connection":{"type":"athena","variable":"conn"},"query":"CREATE EXTERNAL TABLE IF NOT EXISTS stations  (\n  station_id string, \n  latitude double, \n  longitude double, \n  elevation double,\n  name string)\nROW FORMAT SERDE \n  'org.apache.hadoop.hive.serde2.RegexSerDe' \nWITH SERDEPROPERTIES ( \n  'input.regex'='([^ ]*) *([^ ]*) *([^ ]*) *([^ ]*) *(.+)$') \nSTORED AS INPUTFORMAT \n  'org.apache.hadoop.mapred.TextInputFormat' \nOUTPUTFORMAT \n  'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'\nLOCATION\n  's3://livebook-blog/amazon-athena-integration'\nTBLPROPERTIES (\n  'typeOfData'='file')","result_variable":"result","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":{"cache_query":true,"connection":{"type":"athena","variable":"conn"},"query":"CREATE EXTERNAL TABLE IF NOT EXISTS stations  (\n  station_id string, \n  latitude double, \n  longitude double, \n  elevation double,\n  name string)\nROW FORMAT SERDE \n  'org.apache.hadoop.hive.serde2.RegexSerDe' \nWITH SERDEPROPERTIES ( \n  'input.regex'='([^ ]*) *([^ ]*) *([^ ]*) *([^ ]*) *(.+)$') \nSTORED AS INPUTFORMAT \n  'org.apache.hadoop.mapred.TextInputFormat' \nOUTPUTFORMAT \n  'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'\nLOCATION\n  's3://livebook-blog/amazon-athena-integration/'\nTBLPROPERTIES (\n  'typeOfData'='file')","result_variable":"result","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 result =
