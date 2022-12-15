@@ -52,7 +52,7 @@ result =
   ).body
 ```
 
-<!-- livebook:{"attrs":{"cache_query":true,"connection":{"type":"athena","variable":"conn"},"query":"select * from stations order by station_id","result_variable":"result2","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
+<!-- livebook:{"attrs":{"cache_query":true,"connection":{"type":"athena","variable":"conn"},"query":"select * from default.stations order by station_id","result_variable":"result2","timeout":null},"kind":"Elixir.KinoDB.SQLCell","livebook_object":"smart_cell"} -->
 
 ```elixir
 result2 =
