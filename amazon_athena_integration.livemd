@@ -57,7 +57,7 @@ result =
 ```elixir
 result2 =
   Req.post!(conn,
-    athena: {"select * from stations order by station_id", []},
+    athena: {"select * from default.stations order by station_id", []},
     cache_query: true
   ).body
 ```
