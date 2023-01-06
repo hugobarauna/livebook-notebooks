@@ -1,0 +1,317 @@
+# What's new in Livebook 0.8
+
+```elixir
+Mix.install(
+  [
+    {:kino, "~> 0.8.0"},
+    {:nx, "~> 0.4.1"},
+    {:stb_image, "~> 0.6.0"},
+    {:axon, "~> 0.3.1"},
+    {:kino_bumblebee, "~> 0.1.0"},
+    {:exla, "~> 0.4.1"},
+    {:kino_slack, "~> 0.1.0"},
+    {:req, "~> 0.3.3"},
+    {:kino_maplibre, "~> 0.1.7"},
+    {:kino_vega_lite, "~> 0.1.7"},
+    {:explorer, "~> 0.4.0"}
+  ],
+  config: [nx: [default_backend: EXLA.Backend]]
+)
+```
+
+## Intro
+
+The [highlight of Livebook 0.8](https://news.livebook.dev/announcing-bumblebee-gpt2-stable-diffusion-and-more-in-elixir-3Op73O) was the new Neural Network Smart cell. But there are many other exciting updates included as well.
+
+This notebook showcases ten of the most noteworthy features released with Livebook 0.8.
+
+## New mechanism for tracking how cells depend on each other
+
+```elixir
+# Cell 1
+x = 1
+```
+
+```elixir
+# Cell 2
+y = 1
+```
+
+```elixir
+# Cell 3
+z = 1
+```
+
+Look how cell 4 below depends on cell 1 and cell 2 above, but doesn't depend on cell 3. And notice how cell 4 simulates a computation that takes some time to finish.
+
+```elixir
+# Cell 4 contains some computation that takes a long time to compute
+Process.sleep(5 * 1000)
+x + y
+```
+
+Before Livebook 0.8, if you changed cell 3, cell 4 would become stale, even though cell 4 didn't depend on cell 3. And you'd need to reevaluate it.
+
+With Livebook 0.8, when you change cell 3, Livebook knows that although cell 4 is subsequent to cell 3, it doesn't depend on it, so it doesn't mark cell 4 as stale anymore.
+
+## Automatic execution of doctests
+
+Whenever you evaluate a cell that contains a module definition with doctests, Livebook will automatically run those doctests for you and will show you the output.
+
+```elixir
+defmodule Fib do
+  @doc ~S"""
+    Calculates the Fibonnaci number.
+
+    ## Examples
+      iex> Fib.fib(0)
+      0
+
+      iex> Fib.fib(1)
+      1
+
+      iex> Fib.fib(2)
+      1
+
+      iex> Fib.fib(3)
+      2
+  """
+  def fib(0), do: 0
+  def fib(1), do: 1
+  def fib(n), do: fib(n - 1) + fib(n - 2)
+end
+```
+
+## Render math in on-hover documentation
+
+Now, the on-hover documentation also supports those fancy math documentation.
+
+Try hovering over the `layer_norm` function below.
+
+```elixir
+&Axon.Layers.layer_norm/4
+```
+
+```elixir
+defmodule Math do
+  @doc ~S"""
+  $$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+  """
+  def quadratic_square_root, do: nil
+end
+```
+
+Or hover over the `quadratic_square_root` function below.
+
+```elixir
+Math.quadratic_square_root()
+```
+
+## View and delete secrets in the sidebar
+
+Livebook 0.7 [introduced secret management](https://news.livebook.dev/whats-new-in-livebook-0.7-2wOPsY). A solution to help you manage sensitive data used by your notebooks, like passwords and API keys.
+
+With this new release, you can also view and delete those secrets in the notebook sidebar.
+
+```elixir
+System.fetch_env!("LB_FOO")
+```
+
+## Support for image input
+
+This new release comes with a [new input](https://hexdocs.pm/kino/Kino.Input.html#image/2) that allows the user of your notebook to upload images:
+
+```elixir
+input = Kino.Input.image("Image")
+```
+
+```elixir
+value = Kino.Input.read(input)
+```
+
+```elixir
+if value.format == :rgb do
+  value.data
+  |> Nx.from_binary(:u8)
+  |> Nx.reshape({value.height, value.width, 3})
+  |> StbImage.from_nx()
+else
+  StbImage.read_binary!(value.data)
+end
+```
+
+## Visualization of nested data as a tree view
+
+```elixir
+Req.get!("https://api.github.com/repos/elixir-lang/elixir")
+```
+
+You can now visualize and inspect nested data in a tree view:
+
+```elixir
+Req.get!("https://api.github.com/repos/elixir-lang/elixir")
+|> Kino.Tree.new()
+```
+
+## Neural Network Smart cell
+
+That new Smart cell allows you to run various machine learning models directly in Livebook with just a few clicks. Here's an example of a text classification model:
+
+<!-- livebook:{"attrs":{"compiler":"exla","sequence_length":100,"task_id":"text_classification","top_k":null,"variant_id":"roberta_bertweet_emotion"},"chunks":[[0,366],[368,538]],"kind":"Elixir.KinoBumblebee.TaskCell","livebook_object":"smart_cell"} -->
+
+```elixir
+{:ok, model_info} =
+  Bumblebee.load_model({:hf, "finiteautomata/bertweet-base-emotion-analysis"},
+    log_params_diff: false
+  )
+
+{:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, "vinai/bertweet-base"})
+
+serving =
+  Bumblebee.Text.text_classification(model_info, tokenizer,
+    compile: [batch_size: 1, sequence_length: 100],
+    defn_options: [compiler: EXLA]
+  )
+
+text_input = Kino.Input.textarea("Text", default: "Oh wow, I didn't know that!")
+form = Kino.Control.form([text: text_input], submit: "Run")
+frame = Kino.Frame.new()
+
+form
+|> Kino.Control.stream()
+|> Kino.listen(fn %{data: %{text: text}} ->
+  Kino.Frame.render(frame, Kino.Markdown.new("Running..."))
+  output = Nx.Serving.run(serving, text)
+
+  output.predictions
+  |> Enum.map(&{&1.label, &1.score})
+  |> Kino.Bumblebee.ScoredList.new()
+  |> then(&Kino.Frame.render(frame, &1))
+end)
+
+Kino.Layout.grid([form, frame], boxed: true, gap: 16)
+```
+
+We talked more about it in the [Announcing Bumblebee: GPT2, Stable Diffusion, and more in Elixir blog post](https://news.livebook.dev/announcing-bumblebee-gpt2-stable-diffusion-and-more-in-elixir-3Op73O).
+
+## Slack Message Smart cell
+
+The Slack Smart cell allows you to send a message to a Slack channel.
+
+<!-- livebook:{"attrs":{"channel":"","message":"Hello world from Livebook! =D","token_secret_name":"SLACK_TOKEN"},"chunks":null,"kind":"Elixir.KinoSlack.MessageCell","livebook_object":"smart_cell"} -->
+
+```elixir
+
+```
+
+## Geocoding in Map Smart cell
+
+With the new updates in the Map Smart cell, besides inserting geodata as latitude and longitude, you can also use the names of countries, states, cities, counties, and streets.
+
+<!-- livebook:{"attrs":{"center":"-53.2, -10.3333333","layers":[{"cluster_colors":["#51bbd6","#f1f075","#f28cb1"],"cluster_max":750,"cluster_min":100,"coordinates_format":"lng_lat","layer_color":"#050505","layer_opacity":0.7,"layer_radius":5,"layer_source":"🌎 Geocoding","layer_source_query":"São Paulo","layer_source_query_strict":"state","layer_type":"fill","source_coordinates":null,"source_latitude":null,"source_longitude":null,"source_type":"query"},{"cluster_colors":["#51bbd6","#f1f075","#f28cb1"],"cluster_max":750,"cluster_min":100,"coordinates_format":"lng_lat","layer_color":"#e1ef25","layer_opacity":1,"layer_radius":3,"layer_source":"🌎 Geocoding","layer_source_query":"São Paulo","layer_source_query_strict":"city","layer_type":"fill","source_coordinates":null,"source_latitude":null,"source_longitude":null,"source_type":"query"}],"ml_alias":"Elixir.MapLibre","style":"default","zoom":3},"chunks":null,"kind":"Elixir.KinoMapLibre.MapCell","livebook_object":"smart_cell"} -->
+
+```elixir
+MapLibre.new(center: {-53.2, -10.3333333}, zoom: 3)
+|> MapLibre.add_geocode_source("sao_paulo_state", "São Paulo", :state)
+|> MapLibre.add_geocode_source("sao_paulo_city", "São Paulo", :city)
+|> MapLibre.add_layer(
+  id: "sao_paulo_state_fill_1",
+  source: "sao_paulo_state",
+  type: :fill,
+  paint: [fill_color: "#050505", fill_opacity: 0.7]
+)
+|> MapLibre.add_layer(
+  id: "sao_paulo_city_fill_2",
+  source: "sao_paulo_city",
+  type: :fill,
+  paint: [fill_color: "#e1ef25", fill_opacity: 1]
+)
+```
+
+## More options to configure charts with the Chart Smart Cell
+
+### Bin config
+
+```elixir
+iris = Explorer.Datasets.iris()
+```
+
+You can now toggle the **bin** config to discretize numeric values into a set of bins. This is useful for creating histograms, for example. Here’s how it works:
+
+<!-- livebook:{"attrs":{"chart_title":null,"height":300,"layers":[{"chart_type":"bar","color_field":null,"color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":"pastel1","color_field_type":null,"data_variable":"iris","x_field":"sepal_length","x_field_aggregate":null,"x_field_bin":true,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"sepal_width","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+
+```elixir
+VegaLite.new(width: 600, height: 300)
+|> VegaLite.data_from_values(iris, only: ["sepal_length", "sepal_width"])
+|> VegaLite.mark(:bar)
+|> VegaLite.encode_field(:x, "sepal_length", type: :quantitative, bin: true)
+|> VegaLite.encode_field(:y, "sepal_width", type: :quantitative)
+```
+
+### Scheme color config
+
+<!-- livebook:{"break_markdown":true} -->
+
+You can now choose your chart's color from a set of named color palettes.
+
+<!-- livebook:{"attrs":{"chart_title":null,"height":300,"layers":[{"chart_type":"bar","color_field":"species","color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":"pastel1","color_field_type":null,"data_variable":"iris","x_field":"sepal_length","x_field_aggregate":null,"x_field_bin":true,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"sepal_width","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+
+```elixir
+VegaLite.new(width: 600, height: 300)
+|> VegaLite.data_from_values(iris, only: ["sepal_length", "sepal_width", "species"])
+|> VegaLite.mark(:bar)
+|> VegaLite.encode_field(:x, "sepal_length", type: :quantitative, bin: true)
+|> VegaLite.encode_field(:y, "sepal_width", type: :quantitative)
+|> VegaLite.encode_field(:color, "species", scale: [scheme: "pastel1"])
+```
+
+### Scale config
+
+<!-- livebook:{"break_markdown":true} -->
+
+Let's use an example from https://www.statology.org/when-to-use-log-scale/, it shows where a log scale would be useful. And we can set a log scale using the new **scale config**.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Suppose we make a $100,000 investment in a stock that grows at 6% per year.
+
+```elixir
+investment_principal = 100_000
+annual_interest_rate = 6 / 100
+years = 1..30
+
+data =
+  years
+  |> Enum.map(fn year ->
+    value = investment_principal * Float.pow(1 + annual_interest_rate, year - 1)
+    %{year: year, value: value}
+  end)
+```
+
+Here’s what a line chart of the investment would look like over a 30-year period on a linear scale:
+
+<!-- livebook:{"attrs":{"chart_title":null,"height":300,"layers":[{"chart_type":"line","color_field":null,"color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"data","x_field":"year","x_field_aggregate":null,"x_field_bin":false,"x_field_scale_type":null,"x_field_type":"ordinal","y_field":"value","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":"linear","y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+
+```elixir
+VegaLite.new(width: 600, height: 300)
+|> VegaLite.data_from_values(data, only: ["year", "value"])
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "year", type: :ordinal)
+|> VegaLite.encode_field(:y, "value", type: :quantitative, scale: [type: :linear])
+```
+
+This chart is useful for visualizing how much the investment value changes in raw dollars each year, but suppose we're more interested in understanding the percentage growth of the investment.
+
+In this case, it would be useful to convert the y-axis to a log scale. You can use the **scale config** for that.
+
+<!-- livebook:{"attrs":{"chart_title":null,"height":300,"layers":[{"chart_type":"line","color_field":null,"color_field_aggregate":null,"color_field_bin":false,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"data","x_field":"year","x_field_aggregate":null,"x_field_bin":false,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"value","y_field_aggregate":null,"y_field_bin":false,"y_field_scale_type":"log","y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":600},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+
+```elixir
+VegaLite.new(width: 600, height: 300)
+|> VegaLite.data_from_values(data, only: ["year", "value"])
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "year", type: :quantitative)
+|> VegaLite.encode_field(:y, "value", type: :quantitative, scale: [type: :log])
+```
+
+Using this chart, we can see that the percentage change in the investment value has been constant every year during the 30-year period.
