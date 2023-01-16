@@ -84,7 +84,7 @@ end
 
 ## Render math in on-hover documentation
 
-Now, the on-hover documentation also supports those fancy math documentation.
+Now, the on-hover documentation also supports math documentation (based on [KaTeX](https://katex.org/)).
 
 Try hovering over the `layer_norm` function below.
 
