@@ -1,0 +1,105 @@
+# What's new in Livebook 0.8.1
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.8.1"},
+  {:stb_image, "~> 0.6.0"},
+  {:nx, "~> 0.4.2"},
+  {:kino_vega_lite, "~> 0.1.7"},
+  {:explorer, "~> 0.5.0"}
+])
+```
+
+## Intro
+
+This is an accompanying notebook to the Livebook v0.8.1 announcement blog post.
+
+## Support for file input
+
+You can use the new file input to let the user of your notebook upload a file that the notebook will process.
+
+Let's upload a CSV file and do some data wrangling.
+
+We'll use a public dataset from Kaggle with data about housing prices.
+
+Download the [CSV from Kaggle](https://www.kaggle.com/datasets/yasserh/housing-prices-dataset?resource=download) and use the input below to upload it to this notebook.
+
+```elixir
+file_input = Kino.Input.file("Your CSV file")
+```
+
+```elixir
+value = Kino.Input.read(file_input)
+```
+
+```elixir
+dataframe = Explorer.DataFrame.from_csv!(value.path)
+```
+
+Calculates the average price of a house, grouped by the number of bathrooms.
+
+```elixir
+require Explorer.DataFrame
+alias Explorer.DataFrame, as: Df
+
+dataframe
+|> Df.select(["price", "bathrooms"])
+|> Df.group_by("bathrooms")
+|> Df.summarise(median_price: median(price))
+|> Df.arrange(bathrooms)
+|> Df.table()
+```
+
+## Support for audio input
+
+First, use the input below to record some audio.
+
+```elixir
+input = Kino.Input.audio("Audio")
+```
+
+Now, let's read the audio binary data.
+
+```elixir
+value = Kino.Input.read(input)
+```
+
+Let's transform that audio data into an Nx tensor
+
+```elixir
+tensor =
+  value.data
+  |> Nx.from_binary(:f32)
+  |> Nx.reshape({:auto, value.num_channels})
+```
+
+Let's visualize that audio data in a waveform-like format.
+
+```elixir
+y = Nx.to_flat_list(tensor[100_000..150_000] |> Nx.mean(axes: [-1]))
+x = Enum.with_index(y, fn _, idx -> idx end)
+
+VegaLite.new(width: 800)
+|> VegaLite.data_from_values(x: x, y: y)
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "x", type: :quantitative)
+|> VegaLite.encode_field(:y, "y", type: :quantitative)
+```
+
+If you don't see anything in the chart, you may need to change the indexes of the tensor in the `tensor[100_000..150_000]` of the code above.
+
+## Support for capturing images from camera in the image input
+
+Use the input below to take a picture using your computer's camera.
+
+```elixir
+a = Kino.Input.image("my photo", format: :png)
+```
+
+Read the input and visualize the picture.
+
+```elixir
+image = Kino.Input.read(a)
+
+StbImage.read_binary!(image.data)
+```
