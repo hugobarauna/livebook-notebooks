@@ -21,11 +21,18 @@ end
 Processos se comunicam por passagem de mensagens, através das funções `send` e `receive`.
 
 ```elixir
-# inicia um novo processo
+# inicar um novo processo
 child_process_pid =
   spawn(fn ->
     receive do
-      {:ping, caller} -> send(caller, :pong)
+      {:ping, caller} ->
+        IO.puts("Processo #{inspect(self())} recebeu uma mensagem do processo #{inspect(caller)}")
+
+        IO.puts(
+          "Processo #{inspect(self())} enviou uma mensagem para o processo #{inspect(caller)}"
+        )
+
+        send(caller, {:pong, self()})
     end
   end)
 
@@ -35,8 +42,14 @@ parent_process_pid = self()
 # envia uma mensagem para o processo child_process_pid
 send(child_process_pid, {:ping, parent_process_pid})
 
+IO.puts(
+  "Processo #{inspect(parent_process_pid)} enviou uma mensagem para o processo #{inspect(child_process_pid)}"
+)
+
+# fica esperando receber uma mensagem mensagem
 receive do
-  :pong -> :it_worked!
+  {:pong, caller} ->
+    IO.puts("Processo #{inspect(self())} recebeu uma mensagem do processo #{inspect(caller)}")
 end
 ```
 
@@ -61,6 +74,19 @@ Kino.Process.render_seq_trace(fn ->
   receive do
     :pong -> :it_worked!
   end
+end)
+```
+
+Vamos ver outro exemplo de visualização de troca de mensagem, dessa vez um pouco mais complexo.
+
+```elixir
+Kino.Process.render_seq_trace(fn ->
+  1..4
+  |> Task.async_stream(
+    fn _ -> Process.sleep(Enum.random(100..300)) end,
+    max_concurrency: 4
+  )
+  |> Stream.run()
 end)
 ```
 
@@ -135,6 +161,12 @@ GenServer.stop(:process_one, :abnormal_reason)
 supervisor_pid
 ```
 
+Podemos confirmar que o processo original do `:process_one` foi desligado.
+
+```elixir
+Process.alive?(process_one_original_pid)
+```
+
 Podemos perceber que o PID do `:process_one` mudou, porque desligamos ele e ele foi reiniciado pelo seu supervisor
 
 ```elixir
@@ -200,7 +232,40 @@ Vamos ver isso funcionando.
 
 <!-- livebook:{"break_markdown":true} -->
 
-Primeiro, vamos conectar o **node** (nó) rodando o código deste notebook a um outro nó rodando uma VM do Erlang.
+Primeiro, vamos ver um exemplo de troca de mensagens entre dois processos rodando no mesmo nó.
+
+```elixir
+current_node_name = node()
+
+# inicar um novo processo
+child_process_pid =
+  spawn(fn ->
+    receive do
+      {:ping, caller} ->
+        send(caller, {:pong, node(), self()})
+    end
+  end)
+
+# pega o pid do processo rodando
+parent_process_pid = self()
+
+# envia uma mensagem para o processo child_process_pid
+send(child_process_pid, {:ping, parent_process_pid})
+
+IO.puts(
+  "Processo #{inspect(parent_process_pid)} do nó #{node()} enviou uma mensagem para o processo #{inspect(child_process_pid)}"
+)
+
+# fica esperando receber uma mensagem mensagem
+receive do
+  {:pong, caller_node, caller} ->
+    IO.puts(
+      "Processo #{inspect(self())} recebeu uma mensagem do processo #{inspect(caller)} do nó #{caller_node}"
+    )
+end
+```
+
+Agora, vamos conectar o **node** (nó) rodando o código deste notebook a um outro nó rodando uma VM do Erlang.
 
 Para isso, abra um terminal na sua máquina (assumindo que ela tem o Elixir instalado) e digite: `iex --sname remote_node`
 
@@ -227,7 +292,7 @@ Execute a célula a seguir e copie e cole o nome do nó o o seu cookie para os c
 
 Ao executar a célula abaixo:
 
-* o nome do nó que você iniciou com o IEx será salvo na variável `node`
+* o nome do nó que você iniciou com o IEx será salvo na variável `remote_node`
 * o nó rodando o código desse notebook irá se conectar com o nó do seu IEx
 
 ```elixir
@@ -248,41 +313,9 @@ Node.set_cookie(remote_node, cookie)
 
 Agora com os nós conectados, poderemos fazer um experimento que irá mostrar como a troca de mensagens entre dois processos independe do nó onde os procesos estão rodando.
 
-Primeiro, vamos ver um exemplo de troca de mensagens entre dois processos rodando no mesmo nó.
+<!-- livebook:{"break_markdown":true} -->
 
-```elixir
-current_node_name = node()
-
-# inicar um novo processo
-child_process_pid =
-  spawn(fn ->
-    receive do
-      {:ping, caller} ->
-        IO.puts("Processo #{inspect(self())} recebeu uma mensagem do processo #{inspect(caller)}")
-        send(caller, {:pong, node(), self()})
-    end
-  end)
-
-# pega o pid do processo rodando
-parent_process_pid = self()
-
-# envia uma mensagem para o processo child_process_pid
-send(child_process_pid, {:ping, parent_process_pid})
-
-IO.puts(
-  "Processo #{inspect(parent_process_pid)} do nó #{node()} enviou uma mensagem para o processo #{inspect(child_process_pid)}"
-)
-
-# fica esperando receber uma mensagem mensagem
-receive do
-  {:pong, caller_node, caller} ->
-    IO.puts(
-      "Processo #{inspect(self())} recebeu uma mensagem do processo #{inspect(caller)} do nó #{caller_node}"
-    )
-end
-```
-
-Agora vamos enviar uma mensagem para um processo rodando no node do IEx, o `remote_node`.
+Vamos enviar uma mensagem para um processo rodando no node do IEx, o `remote_node`.
 
 ```elixir
 current_node_name = node()
@@ -292,7 +325,6 @@ remote_child_process_pid =
   Node.spawn(remote_node, fn ->
     receive do
       {:ping, caller} ->
-        IO.puts("Processo #{inspect(self())} recebeu uma mensagem do processo #{inspect(caller)}")
         send(caller, {:pong, node(), self()})
     end
   end)
