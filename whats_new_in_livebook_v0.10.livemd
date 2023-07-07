@@ -1,0 +1,108 @@
+# What's new in Livebook 0.10
+
+```elixir
+Mix.install([
+  {:kino, github: "livebook-dev/kino", override: true},
+  {:kino_explorer, "~> 0.1.8"},
+  {:req, "~> 0.3.10"}
+])
+```
+
+## Initial Erlang Support
+
+### Erlang code cells
+
+<!-- livebook:{"break_markdown":true} -->
+
+You can write Erlang code inside Livebook
+
+```erlang
+X = 2,
+Y = 3,
+
+Sum = fun(A, B) -> A + B end,
+
+Sum(X, Y).
+```
+
+### Elixir interfacing with Erlang
+
+<!-- livebook:{"break_markdown":true} -->
+
+Accessing variables defined in Erlang
+
+```elixir
+x
+```
+
+Calling functions defined in Erlang
+
+```elixir
+sum.(5, 5)
+```
+
+### Erlang interfacing with Elixir
+
+```elixir
+answer = 42
+
+defmodule Math do
+  def multiply(x, y), do: x * y
+end
+```
+
+Accessing variabes defined in Elixir
+
+```erlang
+Answer.
+```
+
+Calling functions defined in Elixir
+
+```erlang
+'Elixir.Math':multiply(3, 2).
+```
+
+## Live Doctests
+
+When you evaluate a cell with doctests, a traffic light-like status appears on the left of each doctest. This gives you a visual indication if it passed or not. Additionally, when the doctest fails, the failing result is directly inlined in the code editor.
+
+<!-- livebook:{"continue_on_error":true} -->
+
+```elixir
+defmodule Fib do
+  @doc ~S"""
+    Calculates the Fibonnaci number.
+
+    ## Examples
+      iex> Fib.fib(0)
+      0
+
+      iex> Fib.fib(1)
+      1
+
+      iex> Fib.fib(2)
+      1
+
+      iex> Fib.fib(3)
+      2
+  """
+  def fib(0), do: 0
+  def fib(1), do: 1
+
+  def fib(n) do
+    # to help with demo of streaming doctests results
+    Process.sleep(:timer.seconds(1))
+    n
+    # fib(n - 1) + fib(n - 2)
+  end
+end
+```
+
+## Download Option for Dataframes
+
+Now you can export a dataframe to a CSV, NDJSON, or Parquet file. Just click on the "Export" icon (<i class="ri-file-download-line" style="color:#61758a"></i>) when you're visualizing a dataframe:
+
+```elixir
+dataframe = Explorer.Datasets.iris()
+```
