@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:kino, github: "livebook-dev/kino", override: true},
+  {:kino, "~> 0.10.0"},
   {:kino_explorer, "~> 0.1.8"},
   {:req, "~> 0.3.10"}
 ])
