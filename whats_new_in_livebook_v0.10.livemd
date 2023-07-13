@@ -8,7 +8,41 @@ Mix.install([
 ])
 ```
 
+## Multi-session Livebook apps
+
+Livebook 0.9 introduced Livebook apps. This is a way to turn your notebook into an interactive web application. Now, we're expanding that further.
+
+Initially, Livebook Apps was designed for long-running applications. Behind the scenes, only one instance of a Livebook app could run at any given moment. Since Livebook has built-in support for multiple users, all users accessing an app would be sharing the same instance of the app. We're now calling that single-session Livebook apps.
+
+This new version introduces multi-session Livebook Apps. What's different is that when you join a multi-session application, you get a version of that app exclusively for you. Like single-session apps, multi-session apps can run for as long as they want, but most often, they will receive user input, execute several instructions, and then exit.
+
+We believe they are an excellent fit for automating technical and business workflows. You can think of them as something similar to scripts, but instead of running in a terminal, they are interactive web applications accessed through the browser.
+
+For example, instead of repeatedly being asked to run one-off scripts, you can package that script as a Livebook app and makes it accessible to other team members to run it, at any time, by themselves.
+
+Let's see how that works.
+
+```elixir
+Kino.HTML.new(
+  ~S[<iframe width="100%" height="515" src="https://www.youtube-nocookie.com/embed/dSjryA1iFng" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>]
+)
+```
+
+## Presentation View
+
+We noticed many people use Livebook for presentations. However, it can be frustrating to switch between Livebook and your slides. Also, showing the whole notebook can distract your audience. But there's good news!
+
+Franklin Rakotomalala contributed a Presentation view feature that hides the sidebar and focuses on the part of your notebook you want to present.
+
+To learn how that works, click on the "Choose views to activate" icon (<i class="ri-layout-5-line" style="color:#61758a; font-size:1.3em"></i>) at the bottom right, and activate the "Presentation View."
+
 ## Initial Erlang Support
+
+You can now write Erlang code inside Livebook. Not only that, but you can combine it with Elixir in the same notebook. If you define a function or a variable inside one language, you can easily use it in the other.
+
+This was a community contribution by Benedikt Reinartz. Thanks to him, Livebook now supports multiple BEAM languages.
+
+<!-- livebook:{"break_markdown":true} -->
 
 ### Erlang code cells
 
@@ -65,6 +99,8 @@ Calling functions defined in Elixir
 
 ## Live Doctests
 
+Starting from version 0.8, doctests are integrated with Livebook. This new version comes with exciting improvements in that area.
+
 When you evaluate a cell with doctests, a traffic light-like status appears on the left of each doctest. This gives you a visual indication if it passed or not. Additionally, when the doctest fails, the failing result is directly inlined in the code editor.
 
 <!-- livebook:{"continue_on_error":true} -->
@@ -99,9 +135,11 @@ defmodule Fib do
 end
 ```
 
-## Download Option for Dataframes
+## Dataframe File Export
 
-Now you can export a dataframe to a CSV, NDJSON, or Parquet file. Just click on the "Export" icon (<i class="ri-file-download-line" style="color:#61758a"></i>) when you're visualizing a dataframe:
+When working on a data analysis task using Livebook, you might need to access the analysis result from another tool or share them with someone who prefers opening it in a spreadsheet.
+
+Now, you can easily do that by exporting your dataframe to a CSV, NDJSON, or Parquet file. Just click on the "Export" icon (<i class="ri-file-download-line" style="color:#61758a; font-size:1.3em"></i>) when you're visualizing a dataframe.
 
 ```elixir
 dataframe = Explorer.Datasets.iris()
