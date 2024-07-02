@@ -1,0 +1,358 @@
+<!-- livebook:{"app_settings":{"access_type":"public","output_type":"rich","slug":"ci-green-streak"}} -->
+
+# CI Green Streak
+
+```elixir
+Mix.install([
+  {:plug, "~> 1.16"},
+  {:jason, "~> 1.4"},
+  {:kino, "~> 0.13.1"},
+  {:req, "~> 0.5.0"}
+])
+```
+
+## Storage
+
+```elixir
+defmodule Storage do
+  def get!(dets_table, key) do
+    [{^key, value}] = :dets.lookup(dets_table, key)
+    value
+  end
+
+  def set!(dets_table, key, value) do
+    :ok = :dets.insert(dets_table, {key, value})
+    value
+  end
+end
+```
+
+## UI
+
+```elixir
+defmodule UiHelpers do
+  @doc ~S"""
+  ## Examples
+
+      iex> UiHelpers.seconds_to_words(0)
+      "Unknown time"
+
+      iex> UiHelpers.seconds_to_words(60)
+      "60 Second(s)"
+
+      iex> UiHelpers.seconds_to_words(89_600)
+      "1 Day(s)"
+  """
+  def seconds_to_words(0), do: "Unknown time"
+  def seconds_to_words(seconds) when seconds < 0, do: "0 Seconds"
+  def seconds_to_words(seconds) when seconds <= 60, do: "#{seconds} Second(s)"
+  def seconds_to_words(seconds) when seconds <= 3_600, do: "#{floor(seconds / 60)} Minute(s)"
+  def seconds_to_words(seconds) when seconds <= 86_400, do: "#{floor(seconds / 3_600)} Hour(s)"
+  def seconds_to_words(seconds), do: "#{floor(seconds / 86_400)} Day(s)"
+end
+```
+
+```elixir
+defmodule BuildStreakKino do
+  def new(build_streak) do
+    Kino.Layout.grid([
+      current_streak(build_streak),
+      record_streak(build_streak)
+    ])
+  end
+
+  def record_streak(build_streak) do
+    Kino.Markdown.new("""
+    **Our record is #{UiHelpers.seconds_to_words(build_streak.record)}**
+    """)
+  end
+
+  def current_streak(build_streak) do
+    Kino.HTML.new("""
+    <h2>
+      <span id='current-streak' data-last-red-build='#{build_streak.last_red_build}'></span>
+      Without a Red Build
+    </h2>
+
+    <script>
+      function formatDuration(seconds) {
+        const days = Math.floor(seconds / (24 * 60 * 60));
+        seconds %= 24 * 60 * 60;
+        const hours = Math.floor(seconds / (60 * 60));
+        seconds %= 60 * 60;
+        const minutes = Math.floor(seconds / 60);
+        seconds %= 60;
+
+        const parts = [];
+        if (days > 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+        if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+        if (minutes > 0) parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
+        if (seconds > 0 || parts.length === 0) parts.push(`${seconds} second${seconds !== 1 ? 's' : ''}`);
+
+        if (parts.length > 1) {
+          const lastPart = parts.pop();
+          return parts.join(', ') + ', and ' + lastPart;
+        } else {
+          return parts[0];
+        }
+      }
+
+      function updateDuration() {
+        const spanElement = document.getElementById('current-streak');
+        const lastRedBuild = new Date(spanElement.getAttribute('data-last-red-build'));
+        const now = new Date();
+
+        const elapsedSeconds = Math.floor((now - lastRedBuild) / 1000);
+        const formattedDuration = formatDuration(elapsedSeconds);
+        spanElement.textContent = formattedDuration;
+      }
+
+      setInterval(updateDuration, 1000);
+      updateDuration();
+    </script>
+    """)
+  end
+end
+```
+
+## Slack notifier
+
+```elixir
+defmodule SlackNotifier do
+  def record_streak(build_streak) do
+    # The Slack notification feature is optional. To use it,
+    # create a Livebook secret with the name "SLACK_TOKEN"
+    # and the value should be the token of your Slack app.
+    #
+    # To create a Slack app for you and get a token, follow
+    # https://api.slack.com/tutorials/tracks/getting-a-token
+    with {:ok, slack_token} <- System.fetch_env("LB_SLACK_TOKEN") do
+      req =
+        Req.new(
+          base_url: "https://slack.com/api",
+          auth: {:bearer, slack_token}
+        )
+
+      message =
+        "New build streak record: #{UiHelpers.seconds_to_words(build_streak.record)}"
+
+      response =
+        Req.post!(req,
+          url: "/chat.postMessage",
+          json: %{channel: "#notifications", text: message}
+        )
+
+      case response.body do
+        %{"ok" => true} -> :ok
+        %{"ok" => false, "error" => error} -> {:error, error}
+      end
+    end
+  end
+end
+```
+
+## Data structures
+
+```elixir
+defmodule Build do
+  defstruct [:conclusion, :created_at, :head_branch]
+
+  def new(attrs) do
+    attrs =
+      Enum.reduce(attrs, %{}, fn {key, value}, acc ->
+        atom_key = String.to_existing_atom(key)
+        value = cast(key, value)
+        Map.put(acc, atom_key, value)
+      end)
+
+    struct(__MODULE__, attrs)
+  end
+
+  def cast("created_at", value) do
+    value
+    |> DateTime.from_iso8601()
+    |> then(fn {:ok, datetime, 0} -> datetime end)
+  end
+
+  def cast(_key, value), do: value
+end
+```
+
+```elixir
+defmodule BuildStreak do
+  defstruct [:record, :last_red_build]
+
+  def get!(storage) do
+    Storage.get!(storage, :build_streak)
+  end
+
+  def save!(build_streak, storage) do
+    Storage.set!(storage, :build_streak, build_streak)
+  end
+
+  def update_from_build(build_streak, storage, %Build{} = build) do
+    if build.head_branch == "main" do
+      handle_build_conclusion(build_streak, build, storage)
+    else
+      build_streak
+    end
+  end
+
+  defp handle_build_conclusion(build_streak, %Build{conclusion: "failure"} = build, storage) do
+    build_streak = %{build_streak | last_red_build: build.created_at}
+    BuildStreak.save!(build_streak, storage)
+  end
+
+  defp handle_build_conclusion(build_streak, %Build{conclusion: "success"} = build, storage) do
+    new_streak = DateTime.diff(build.created_at, build_streak.last_red_build)
+
+    if new_streak > build_streak.record do
+      build_streak = %{build_streak | record: new_streak}
+
+      build_streak
+      |> BuildStreak.save!(storage)
+      |> SlackNotifier.record_streak()
+
+      build_streak
+    else
+      build_streak
+    end
+  end
+end
+```
+
+## Server
+
+```elixir
+defmodule BuildStreakServer do
+  use GenServer
+
+  def start_link(state) do
+    GenServer.start_link(__MODULE__, state, name: __MODULE__)
+  end
+
+  def update_from_build(build) do
+    GenServer.cast(__MODULE__, {:update_from_build, build})
+  end
+
+  @impl true
+  def init(state) do
+    build_streak = BuildStreak.get!(state.storage)
+    state = Map.put(state, :build_streak, build_streak)
+
+    {button, state} = Map.pop!(state, :reset_button)
+    Kino.Control.subscribe(button, :reset_button_clicked)
+
+    {:ok, state |> render()}
+  end
+
+  @impl true
+  def handle_info({:reset_button_clicked, _}, state) do
+    build_streak = %BuildStreak{record: 0, last_red_build: DateTime.utc_now()}
+    BuildStreak.save!(build_streak, state.storage)
+
+    {:noreply, %{state | build_streak: build_streak} |> render()}
+  end
+
+  @impl true
+  def handle_cast({:update_from_build, build}, state) do
+    build_streak = BuildStreak.update_from_build(state.build_streak, state.storage, build)
+
+    {:noreply, %{state | build_streak: build_streak} |> render()}
+  end
+
+  defp render(state) do
+    build_streak_kino = BuildStreakKino.new(state.build_streak)
+    Kino.Frame.render(state.frame, build_streak_kino)
+    state
+  end
+end
+```
+
+## API
+
+```elixir
+defmodule ApiRouter do
+  use Plug.Router
+
+  plug(:match)
+  plug(Plug.Logger, log: :debug)
+  plug(Plug.Parsers, parsers: [:json], json_decoder: Jason)
+  plug(:dispatch)
+
+  post "/webhook" do
+    update_streak(conn.body_params)
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, ~s({"message": "ok"}))
+  end
+
+  match _ do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(404, ~s({"message": "not found"}))
+  end
+
+  defp update_streak(webhook_payload) do
+    get_in(webhook_payload["check_suite"])
+    |> Build.new()
+    |> BuildStreakServer.update_from_build()
+  end
+end
+```
+
+## Main
+
+```elixir
+defmodule App do
+  def start() do
+    dets_table = setup_dets_table()
+    setup_initial_state(dets_table)
+    do_start(dets_table)
+  end
+
+  defp setup_dets_table() do
+    cache_dir = :filename.basedir(:user_cache, "lb_app_ci_build_streak")
+    File.mkdir_p!(cache_dir)
+    dets_table_path = Path.join(cache_dir, "storage.dets")
+
+    with {:ok, dets_table} <-
+           :dets.open_file(:storage, type: :set, file: String.to_charlist(dets_table_path)) do
+      dets_table
+    else
+      {:error, reason} -> raise "Failed to open DETS table: #{inspect(reason)}"
+    end
+  end
+
+  defp setup_initial_state(dets_table) do
+    case :dets.lookup(dets_table, :build_streak) do
+      [] ->
+        %BuildStreak{record: 0, last_red_build: DateTime.utc_now()}
+        |> BuildStreak.save!(dets_table)
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp do_start(dets_table) do
+    Kino.Proxy.listen(ApiRouter)
+
+    build_streak_frame = Kino.Frame.new()
+    button = Kino.Control.button("Reset counters")
+
+    Kino.start_child!({
+      BuildStreakServer,
+      %{frame: build_streak_frame, reset_button: button, storage: dets_table}
+    })
+
+    Kino.Layout.grid([
+      build_streak_frame,
+      button
+    ])
+  end
+end
+
+App.start()
+```
