@@ -24,21 +24,21 @@ phoenix_app_node = Kino.RPC.eval_string(node, ~S"node()", file: __ENV__.file)
 ```
 
 ````elixir
-# Kino.Markdown.new("""
-# ```mermaid
-# flowchart LR
+Kino.Markdown.new("""
+```mermaid
+flowchart LR
 
-#     subgraph "&nbsp&nbsp #{livebook_app_node} &nbsp&nbsp"
-#     lbapp[Livebook app]
-#     end
+    subgraph "&nbsp&nbsp node: #{livebook_app_node} &nbsp&nbsp"
+    lbapp[Livebook app]
+    end
 
-#     subgraph "&nbsp&nbsp #{phoenix_app_node} &nbsp&nbsp"
-#     phxapp[Phoenix app]
-#     end
+    subgraph "&nbsp&nbsp node: #{phoenix_app_node} &nbsp&nbsp"
+    phxapp[Phoenix app]
+    end
 
-#     lbapp-.Erlang distributed.-phxapp
-# ```
-# """)
+    lbapp-.Erlang distributed.-phxapp
+```
+""")
 ````
 
 ```elixir
@@ -160,4 +160,3 @@ Kino.RPC.eval_string(
 Kino.Frame.clear(ttl_frame)
 text("Finished ✅")
 ```
-

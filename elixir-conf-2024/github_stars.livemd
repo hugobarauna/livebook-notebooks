@@ -1,10 +1,10 @@
-<!-- livebook:{"app_settings":{"access_type":"public","output_type":"rich","slug":"github-stars"},"deployment_group_id":"44","hub_id":"team-exconf-demos"} -->
+<!-- livebook:{"app_settings":{"access_type":"public","output_type":"rich","slug":"github-stars"}} -->
 
 # Github Stars
 
 ```elixir
 Mix.install([
-  {:kino, "~> 0.13.2"},
+  {:kino, "~> 0.14.0"},
   {:req, "~> 0.5.6"},
   {:kino_vega_lite, "~> 0.1.13"}
 ])
@@ -144,33 +144,31 @@ end
 form =
   Kino.Control.form(
     [
-      name: Kino.Input.text("GitHub repo name", default: "livebook-dev/livebook")
+      name: Kino.Input.text("Github full repo name", default: "livebook-dev/livebook")
     ],
-    submit: "Give me stars"
+    submit: "Submit"
   )
 
 output_frame = Kino.Frame.new()
+layout_frame = Kino.Layout.grid([form, output_frame])
 
 Kino.listen(form, fn event ->
-  Kino.Frame.render(output_frame, "Getting data from GitHub...")
-  
+  Kino.Frame.render(output_frame, "Getting data from Github...")
   %{data: %{name: repo_name}} = event
 
-  stars_data =
+  data =
     repo_name
     |> GithubApi.stargazers()
-    |> then(fn {:ok, stargazers} -> GithubDataProcessor.cumulative_star_dates(stargazers) end)
+    |> then(fn {:ok, star_dates} -> GithubDataProcessor.cumulative_star_dates(star_dates) end)
 
-  table = Kino.DataTable.new(stars_data)
-  chart = StarsChart.new(stars_data)
-  tabs = Kino.Layout.tabs(Chart: chart, Data: table)
-
+  table = Kino.DataTable.new(data)
+  chart = StarsChart.new(data)
+  tabs = Kino.Layout.tabs([Chart: chart, Table: table])
   Kino.Frame.render(output_frame, tabs)
 end)
 
-
-Kino.Layout.grid([form, output_frame])
+layout_frame
 
 ```
 
-<!-- livebook:{"offset":4336,"stamp":{"token":"XCP.UVidqLjf7zQik2hEbHBtEpQoFeXorWV2anl63awKvyLP02rLBFDWcDkxGPFNVskiQrgL1NuD_eQxgTDxFHvCTE7aO_uPpRZw_HcQMvSr_86juPImrQ52Dz1Gwew","token_signature":"kBXMw0JOEAQzKcuJnsHJtPNQ0J8w6GptXNT1X2UxLMJvhw4flidMhtsY9e9asJfEhUqt2ZbupnjWflrDHxfq6JN5gMJ3Q9hjOMSO3JALwcpajUAereA0QMtCmiG5fPL7SXb4C5jNLPQpok-mzEmYPzyjJK9_SecsNFbOlIpRxPtqXMgQYTHLUdKtNb6KV-pixR6gXpdVr0LScbtbSoi05jZD3kGT4Ax0gfxttp84VGZo1Z2j2KGIK_XI2WFxhOVzkAsHmVojzcfhDuzHsGexmxFchkcyI4CiibjGw9iYc3NPuNwvehy8W9B8nwlzFm9yJpmqm-9s4qmyeVZXBNVAgg","version":1}} -->
+<!-- livebook:{"offset":4286,"stamp":{"token":"XCP.VglTza_kZO3DTNaa8gU7U_7MW-ZjnbVoh3E3yhZCmKsX-nIJ2_V7gWqwD2goYeUkhZdGL-RslPErdw9Ob7HF4KIXSRd33GLzxu-vVDJ14QPmqSXsZJXxlSCA4Ig","version":2}} -->
