@@ -76,7 +76,7 @@ KinoSpinner.new()
 import Kino.Shorts
 ```
 
-How we can use that `Kino.Spinner` with a form:
+How we can use that `KinoSpinner` with a form:
 
 ```elixir
 form =
