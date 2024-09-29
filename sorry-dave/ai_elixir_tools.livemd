@@ -1,0 +1,291 @@
+<!-- livebook:{"file_entries":[{"file":{"file_system_id":"s3-rlDck45T2FsdLZQbfPkCwrf8uMGhgO_bz2Q7AW1mtuc","file_system_type":"s3","path":"/elixir for ai machine learning and data science.png"},"name":"elixir_for_ai_machine_learning_and_data_science.png","type":"file"}]} -->
+
+# Demo 4: AI/ML com Elixir
+
+```elixir
+Mix.install(
+  [
+    {:kino, "~> 0.14.1"},
+    {:kino_flame, github: "hugobarauna/kino_flame"},
+    {:kino_bumblebee, "~> 0.5.0"},
+    {:axon, "~> 0.5"},
+    {:bumblebee, "~> 0.5"},
+    {:nx, "~> 0.8.0", override: true},
+    {:exla, "~> 0.8.0", override: true},
+    {:explorer, "~> 0.9.2"},
+    {:kino_explorer, "~> 0.1.23"},
+    {:scidata, "~> 0.1.11"},
+    {:castore, "~> 1.0", override: true},
+    {:flame, "~> 0.5.1"}
+  ],
+  system_env: [
+    XLA_TARGET: "cuda12"
+  ],
+  config: [
+    nx: [
+      default_backend: EXLA.Backend,
+      default_defn_options: [compiler: EXLA, client: :cuda]
+    ]
+  ]
+)
+
+defmodule KinoSlides do
+  use GenServer
+
+  def new(slides) do
+    frame = Kino.Frame.new()
+    Kino.start_child({KinoSlides, %{slides: slides, layout_frame: frame}})
+
+    frame
+  end
+
+  def start_link(init_arg) do
+    GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
+  end
+
+  @impl true
+  def init(init_arg) do
+    prev_button = Kino.Control.button("<")
+    next_button = Kino.Control.button(">")
+
+    Kino.Control.subscribe(prev_button, :prev_button_clicked)
+    Kino.Control.subscribe(next_button, :next_button_clicked)
+
+    state = Map.merge(init_arg, %{current_slide: 0, buttons: [prev_button, next_button]})
+
+    {:ok, state |> render()}
+  end
+
+  defp render(state) do
+    slide = Enum.at(state.slides, state.current_slide)
+
+    layout =
+      Kino.Layout.grid([
+        Kino.Markdown.new(slide),
+        Kino.Layout.grid(state.buttons, columns: 8)
+      ])
+
+    Kino.Frame.render(state.layout_frame, layout)
+    state
+  end
+
+  @impl true
+  def handle_info({:prev_button_clicked, _}, state) do
+    current_slide =
+      if(state.current_slide == 0) do
+        0
+      else
+        state.current_slide - 1
+      end
+
+    state = %{state | current_slide: current_slide}
+    {:noreply, state |> render()}
+  end
+
+  @impl true
+  def handle_info({:next_button_clicked, _}, state) do
+    max_slide = Enum.count(state.slides) - 1
+
+    current_slide =
+      if(state.current_slide == max_slide) do
+        max_slide
+      else
+        state.current_slide + 1
+      end
+
+    state = %{state | current_slide: current_slide}
+    {:noreply, state |> render()}
+  end
+end
+
+slides = [
+  """
+  <div class="flex flex-col justify-center items-center p-8" style="height: 600px">
+
+  <div style="transform: scale(2)">
+  <h3>The Nx Stack</h3>
+  <p>Nx: Numerical Elixir</p>
+  </div>
+
+  ![](https://dashbit.co/images/posts/2021/nx.png)
+
+  </div>
+  """,
+  """
+  <div class="flex flex-col justify-center items-center p-8" style="height: 600px">
+
+  <div style="transform: scale(2)">
+  <h3>Ferramentas para cada etapa</h3>
+  </div>
+
+  ![](https://i.imgur.com/b61BFWK.png)
+
+  </div>
+  """
+]
+```
+
+## Stack de ferramentas
+
+```elixir
+KinoSlides.new(slides)
+```
+
+### Ferrametas para cada etapa
+
+<!-- livebook:{"break_markdown":true} -->
+
+* **Nx**: tensores e compilação para CPU/GPU
+* **Explorer**: dataframes
+* **Scholar**: machine learning tradicional
+* **Axon**: redeus neurais
+* **Bumblebee:** modelos pré-treinados integrado com Hugging Face 🤗
+* **Livebook:** notebook computacional
+* **VegaLite:** bindings para o Vega-Lite
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Modelos pré-treinados com Bumblebee
+
+<!-- livebook:{"attrs":"eyJjb21waWxlciI6ImV4bGEiLCJ0YXNrX2lkIjoiaW1hZ2VfY2xhc3NpZmljYXRpb24iLCJ0b3BfayI6bnVsbCwidmFyaWFudF9pZCI6InJlc25ldCJ9","chunks":[[0,290],[292,691]],"kind":"Elixir.KinoBumblebee.TaskCell","livebook_object":"smart_cell"} -->
+
+```elixir
+{:ok, model_info} = Bumblebee.load_model({:hf, "microsoft/resnet-50"})
+{:ok, featurizer} = Bumblebee.load_featurizer({:hf, "microsoft/resnet-50"})
+
+serving =
+  Bumblebee.Vision.image_classification(model_info, featurizer,
+    compile: [batch_size: 1],
+    defn_options: [compiler: EXLA]
+  )
+
+image_input = Kino.Input.image("Image", size: {224, 224})
+form = Kino.Control.form([image: image_input], submit: "Run")
+frame = Kino.Frame.new()
+
+Kino.listen(form, fn %{data: %{image: image}} ->
+  if image do
+    Kino.Frame.render(frame, Kino.Text.new("Running..."))
+
+    image =
+      image.file_ref
+      |> Kino.Input.file_path()
+      |> File.read!()
+      |> Nx.from_binary(:u8)
+      |> Nx.reshape({image.height, image.width, 3})
+
+    output = Nx.Serving.run(serving, image)
+
+    output.predictions
+    |> Enum.map(&{&1.label, &1.score})
+    |> Kino.Bumblebee.ScoredList.new()
+    |> then(&Kino.Frame.render(frame, &1))
+  end
+end)
+
+Kino.Layout.grid([form, frame], boxed: true, gap: 16)
+```
+
+Usar Smart Cell para exemplo de classificação de imagem usando ResNet
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Treinando modelos com Axon
+
+### Preparando o dataset
+
+```elixir
+{images, labels} = Scidata.MNIST.download()
+
+{image_data, image_type, image_shape} = images
+{label_data, label_type, label_shape} = labels
+
+images =
+  image_data
+  |> Nx.from_binary(image_type)
+  |> Nx.divide(255)
+  |> Nx.reshape({60000, :auto})
+
+labels =
+  label_data
+  |> Nx.from_binary(label_type)
+  |> Nx.reshape(label_shape)
+  |> Nx.new_axis(-1)
+  |> Nx.equal(Nx.iota({1, 10}))
+
+train_range = 0..49_999//1
+test_range = 50_000..-1//1
+
+train_images = images[train_range]
+train_labels = labels[train_range]
+test_images = images[test_range]
+test_labels = labels[test_range]
+```
+
+### Construindo o modelo
+
+```elixir
+model =
+  Axon.input("images", shape: {nil, 784})
+  |> Axon.dense(128, activation: :relu)
+  |> Axon.dense(10, activation: :softmax)
+```
+
+```elixir
+template = Nx.template({1, 784}, :f32)
+Axon.Display.as_graph(model, template)
+```
+
+```elixir
+Axon.Display.as_table(model, template)
+|> IO.puts()
+```
+
+### Treinando o modelo
+
+```elixir
+batch_size = 64
+
+train_data =
+  train_images
+  |> Nx.to_batched(batch_size)
+  |> Stream.zip(Nx.to_batched(train_labels, batch_size))
+
+trained_model_state =
+  model
+  |> Axon.Loop.trainer(:categorical_cross_entropy, :sgd)
+  |> Axon.Loop.metric(:accuracy)
+  |> Axon.Loop.run(train_data, %{}, epochs: 10, compiler: EXLA)
+```
+
+### Usando o modelo
+
+```elixir
+test_data =
+  test_images
+  |> Nx.to_batched(batch_size)
+  |> Stream.zip(Nx.to_batched(test_labels, batch_size))
+
+{test_batch, _} = Enum.at(test_data, 7)
+test_image = test_batch[0]
+
+test_image
+|> Nx.reshape({28, 28})
+|> Nx.to_heatmap()
+```
+
+```elixir
+{_, predict_fn} = Axon.build(model, compiler: EXLA)
+
+probabilities =
+  test_image
+  |> Nx.new_axis(0)
+  |> then(&predict_fn.(trained_model_state, &1))
+
+predicted_number =
+  probabilities
+  |> Nx.argmax()
+  |> Nx.to_number()
+```
+
+<!-- livebook:{"offset":6736,"stamp":{"token":"XCP.gYudh4Xmt7H57sTqvyILT8cTLYMRZv8B_C2kQ5I7_IEFSX14Gmw6Ag-NOZSE4HRnE8JBkxCKs-7u5zk3DlXoQk1m7fxA5jukIrVN7w","version":2}} -->

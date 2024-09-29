@@ -1,0 +1,243 @@
+<!-- livebook:{"file_entries":[{"file":{"file_system_id":"s3-rlDck45T2FsdLZQbfPkCwrf8uMGhgO_bz2Q7AW1mtuc","file_system_type":"s3","path":"/elixir for ai machine learning and data science.png"},"name":"elixir_for_ai_machine_learning_and_data_science.png","type":"file"}]} -->
+
+# Demo 3: Sistemas distribuídos com Elixir
+
+```elixir
+Mix.install(
+  [
+    {:kino, "~> 0.14.1"},
+    {:kino_flame, github: "hugobarauna/kino_flame"}
+  ]
+)
+```
+
+## Processo
+
+Processo é a unida mínima de concorrência
+
+```elixir
+self()
+```
+
+```elixir
+pid = self()
+IO.puts("Esse código está sendo executado dentro do processo: #{inspect(pid)}")
+```
+
+Criando novos processos com **spawn**
+
+```elixir
+current_process_pid = self()
+child_process_pid = spawn(fn -> 
+  "pong" 
+end)
+
+IO.inspect(current_process_pid, label: "PID do processo corrente")
+IO.inspect(child_process_pid, label: "PID do processo filho")
+
+# :ok
+```
+
+## Processos se comunicam por passagem de mensagem
+
+Envia mensagem `message` para processo com identificador `pid`
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+send(pid, message)
+```
+
+Recebe mensagem `message` de um outro processo e faz alguma coisa
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+receive do
+  message -> # do something
+end
+```
+
+```elixir
+Kino.Process.render_seq_trace(fn ->
+  # inicia um novo processo
+  child_process_pid =
+    spawn(fn ->
+      receive do
+        {:ping, caller_pid} -> send(caller_pid, :pong)
+      end
+    end)
+
+  # pega o pid do processo rodando
+  parent_process_pid = self()
+
+  # envia uma mensagem para o processo child_process_pid
+  send(child_process_pid, {:ping, parent_process_pid})
+
+  receive do
+    :pong -> :it_worked!
+  end
+end)
+```
+
+## Location transparency
+
+Processos podem se comunicar de modo transparente em relação a que nó (instância máquina virtual / máquina) eles estão rodando.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Mesma API para se comunicar com um processo rodando na máquina local ou em qualquer máquina do cluster:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+send(pid, :message_name)
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+Vamos iniciar um uma instância da máquina virtual do Erlang em outra máquina
+
+<!-- livebook:{"attrs":"eyJiYWNrZW5kIjoiZmx5IiwiY29tcHJlc3MiOmZhbHNlLCJmbHlfY3B1X2tpbmQiOiJzaGFyZWQiLCJmbHlfY3B1cyI6MSwiZmx5X2VudnMiOltdLCJmbHlfZ3B1X2tpbmQiOm51bGwsImZseV9ncHVzIjpudWxsLCJmbHlfbWVtb3J5X2diIjoyLCJtYXgiOjEsIm1heF9jb25jdXJyZW5jeSI6MTAsIm1pbiI6MSwibmFtZSI6InJ1bm5lciJ9","chunks":null,"kind":"Elixir.KinoFLAME.RunnerCell","livebook_object":"smart_cell"} -->
+
+```elixir
+Kino.start_child(
+  {FLAME.Pool,
+   name: :runner,
+   code_sync: [
+     start_apps: true,
+     sync_beams: Kino.beam_paths(),
+     compress: false,
+     copy_paths: [],
+     verbose: true
+   ],
+   min: 1,
+   max: 1,
+   max_concurrency: 10,
+   boot_timeout: :timer.minutes(3),
+   idle_shutdown_after: :timer.minutes(1),
+   timeout: :infinity,
+   track_resources: true,
+   log: :info,
+   backend:
+     {FLAME.FlyBackend,
+      cpu_kind: "shared",
+      cpus: 1,
+      memory_mb: 2048,
+      env: %{"LIVEBOOK_COOKIE" => Node.get_cookie()}}}
+)
+```
+
+```elixir
+remote_node = 
+  Node.list(:hidden)
+  |> Enum.filter(&String.contains?(Atom.to_string(&1), "flame"))
+  |> List.first()
+```
+
+```elixir
+remote_process_pid =
+  Node.spawn(remote_node, fn ->
+    receive do
+      :node_and_pid_info ->
+        IO.puts("Remote process #{inspect(self())} \n\trunning on node #{node()}\n")
+    end
+  end)
+
+Kino.nothing()
+```
+
+```elixir
+local_process_pid =
+  spawn(fn ->
+    receive do
+      :node_and_pid_info ->
+        IO.puts("Local process #{inspect(self())} \n\trunning on node #{node()}\n")
+    end
+  end)
+```
+
+Mesma API para se comunicar com um processo rodando na máquina local ou em qualquer máquina do cluster:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+send(pid, :message_name)
+```
+
+```elixir
+send(remote_process_pid, :node_and_pid_info)
+send(local_process_pid, :node_and_pid_info)
+
+Kino.nothing()
+```
+
+```elixir
+IO.puts("Local process #{inspect(self())}\n\trunning on node #{node()}")
+
+Kino.nothing()
+```
+
+## FLAME: elastic scale by wrapping a code inside a function
+
+```elixir
+defmodule Echo do
+  def hello(message) do
+    IO.puts("ECHO FROM\n\tNODE: #{node()}\n\tMESSAGE: #{message}")
+  end
+end
+```
+
+```elixir
+message = "Sorry, Dave"
+Echo.hello(message)
+```
+
+<!-- livebook:{"attrs":"eyJiYWNrZW5kIjoiZmx5IiwiY29tcHJlc3MiOmZhbHNlLCJjb3B5X3BhdGhzIjpbXSwiZmx5X2NwdV9raW5kIjoic2hhcmVkIiwiZmx5X2NwdXMiOjIsImZseV9lbnZzIjpbXSwiZmx5X2dwdV9raW5kIjpudWxsLCJmbHlfZ3B1cyI6bnVsbCwiZmx5X21lbW9yeV9nYiI6MSwibWF4Ijo0LCJtYXhfY29uY3VycmVuY3kiOjEsIm1pbiI6MCwibmFtZSI6ImVsYXN0aWNfcG9vbCJ9","chunks":null,"kind":"Elixir.KinoFLAME.RunnerCell","livebook_object":"smart_cell"} -->
+
+```elixir
+Kino.start_child(
+  {FLAME.Pool,
+   name: :elastic_pool,
+   code_sync: [
+     start_apps: true,
+     sync_beams: Kino.beam_paths(),
+     compress: false,
+     copy_paths: [],
+     verbose: true
+   ],
+   min: 0,
+   max: 4,
+   max_concurrency: 1,
+   boot_timeout: :timer.minutes(3),
+   idle_shutdown_after: :timer.minutes(1),
+   timeout: :infinity,
+   track_resources: true,
+   log: :info,
+   backend:
+     {FLAME.FlyBackend,
+      cpu_kind: "shared",
+      cpus: 2,
+      memory_mb: 1024,
+      env: %{"LIVEBOOK_COOKIE" => Node.get_cookie()}}}
+)
+```
+
+```elixir
+FLAME.call(:elastic_pool, fn ->
+  message = "Sorry, Dave"
+  Echo.hello(message)
+end)
+```
+
+```elixir
+FLAME.call(
+  :elastic_pool,
+  fn ->
+    message = "Sorry, Dave"
+    Echo.hello(message)
+  end
+)
+```
+
+<!-- livebook:{"offset":5528,"stamp":{"token":"XCP.DwMyR5M9lzW51PW41eTqmX7Qs2Ng5acZfs9WTab9609Q09RCd-LrEnRDst_aLG7Msfgyi68PTq2KewpIxWhQP-WD_eJA-8cbdHmcIg","version":2}} -->
