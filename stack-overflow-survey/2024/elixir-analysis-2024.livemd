@@ -1,6 +1,6 @@
-<!-- livebook:{"file_entries":[{"name":"survey_results_public.csv","type":"attachment"},{"name":"survey_results_schema.csv","type":"attachment"}],"persist_outputs":true} -->
+<!-- livebook:{"app_settings":{"output_type":"rich","slug":"so-survey-elixir"},"file_entries":[{"name":"survey_results_public.csv","type":"attachment"},{"name":"survey_results_schema.csv","type":"attachment"}]} -->
 
-# Stackoverflow survey 2024 analysis for Elixir
+# Stackoverflow survey 2024 analysis for Elixir (WIP)
 
 ```elixir
 Mix.install([
@@ -23,148 +23,16 @@ The associated files are from https://survey.stackoverflow.co/
 schema =
   Kino.FS.file_path("survey_results_schema.csv")
   |> Explorer.DataFrame.from_csv!()
-```
 
-<!-- livebook:{"output":true} -->
-
-```text
-#Explorer.DataFrame<
-  Polars[87 x 6]
-  qid string ["QID2", "QID127", "QID296", "QID308", "QID341", ...]
-  qname string ["MainBranch", "Age", "Employment", "RemoteWork", "Check", ...]
-  question string ["Which of the following options best describes you today? For the purpose of this survey, a developer is \"someone who writes code\".*", "What is your age?*", "Which of the following best describes your current employment status? Select all that apply.*", "Which best describes your current work situation?", "Just checking to make sure you are paying attention to the survey questions. Select ‘Apples’ from the list and you can get back to the survey.*<br><br>", ...]
-  force_resp string ["TRUE", "TRUE", "TRUE", "FALSE", "TRUE", ...]
-  type string ["MC", "MC", "MC", "MC", "MC", ...]
-  selector string ["SAVR", "SAVR", "MAVR", "SAVR", "SAVR", ...]
->
+Kino.nothing()
 ```
 
 ```elixir
 data =
   Kino.FS.file_path("survey_results_public.csv")
   |> Explorer.DataFrame.from_csv!()
-```
 
-<!-- livebook:{"output":true} -->
-
-```text
-#Explorer.DataFrame<
-  Polars[65437 x 114]
-  ResponseId s64 [1, 2, 3, 4, 5, ...]
-  MainBranch string ["I am a developer by profession", "I am a developer by profession", "I am a developer by profession", "I am learning to code", "I am a developer by profession", ...]
-  Age string ["Under 18 years old", "35-44 years old", "45-54 years old", "18-24 years old", "18-24 years old", ...]
-  Employment string ["Employed, full-time", "Employed, full-time", "Employed, full-time", "Student, full-time", "Student, full-time", ...]
-  RemoteWork string ["Remote", "Remote", "Remote", "NA", "NA", ...]
-  Check string ["Apples", "Apples", "Apples", "Apples", "Apples", ...]
-  CodingActivities string ["Hobby", "Hobby;Contribute to open-source projects;Other (please specify):", "Hobby;Contribute to open-source projects;Other (please specify):", "NA", "NA", ...]
-  EdLevel string ["Primary/elementary school", "Bachelor’s degree (B.A., B.S., B.Eng., etc.)", "Master’s degree (M.A., M.S., M.Eng., MBA, etc.)", "Some college/university study without earning a degree", "Secondary school (e.g. American high school, German Realschule or Gymnasium, etc.)", ...]
-  LearnCode string ["Books / Physical media", "Books / Physical media;Colleague;On the job training;Other online resources (e.g., videos, blogs, forum, online community)", "Books / Physical media;Colleague;On the job training;Other online resources (e.g., videos, blogs, forum, online community);School (i.e., University, College, etc)", "Other online resources (e.g., videos, blogs, forum, online community);School (i.e., University, College, etc);Online Courses or Certification", "Other online resources (e.g., videos, blogs, forum, online community)", ...]
-  LearnCodeOnline string ["NA", "Technical documentation;Blogs;Books;Written Tutorials;Stack Overflow", "Technical documentation;Blogs;Books;Written Tutorials;Stack Overflow;Coding sessions (live or recorded);Social Media", "Stack Overflow;How-to videos;Interactive tutorial", "Technical documentation;Blogs;Written Tutorials;Stack Overflow;Social Media;Video-based Online Courses", ...]
-  TechDoc string ["NA", "API document(s) and/or SDK document(s);User guides or README files found in the source repository;First-party knowledge base;Traditional public search engine", "API document(s) and/or SDK document(s);User guides or README files found in the source repository;Traditional public search engine", "NA", "API document(s) and/or SDK document(s);User guides or README files found in the source repository;First-party knowledge base;Traditional public search engine", ...]
-  YearsCode string ["NA", "20", "37", "4", "9", ...]
-  YearsCodePro string ["NA", "17", "27", "NA", "NA", ...]
-  DevType string ["NA", "Developer, full-stack", "Developer Experience", "Developer, full-stack", "Developer, full-stack", ...]
-  OrgSize string ["NA", "NA", "NA", "NA", "NA", ...]
-  PurchaseInfluence string ["NA", "NA", "NA", "NA", "NA", ...]
-  BuyNewTool string ["NA", "NA", "NA", "NA", "NA", ...]
-  BuildvsBuy string ["NA", "NA", "NA", "NA", "NA", ...]
-  TechEndorse string ["NA", "NA", "NA", "NA", "NA", ...]
-  Country string ["United States of America", "United Kingdom of Great Britain and Northern Ireland", "United Kingdom of Great Britain and Northern Ireland", "Canada", "Norway", ...]
-  Currency string ["NA", "NA", "NA", "NA", "NA", ...]
-  CompTotal string ["NA", "NA", "NA", "NA", "NA", ...]
-  LanguageHaveWorkedWith string ["NA", "Bash/Shell (all shells);Go;HTML/CSS;Java;JavaScript;Python;TypeScript", "C#", "C;C++;HTML/CSS;Java;JavaScript;PHP;PowerShell;Python;SQL;TypeScript", "C++;HTML/CSS;JavaScript;Lua;Python;Rust", ...]
-  LanguageWantToWorkWith string ["NA", "Bash/Shell (all shells);Go;HTML/CSS;Java;JavaScript;Kotlin;Python;TypeScript", "C#", "HTML/CSS;Java;JavaScript;PowerShell;Python;SQL;TypeScript", "C++;HTML/CSS;JavaScript;Lua;Python", ...]
-  LanguageAdmired string ["NA", "Bash/Shell (all shells);Go;HTML/CSS;Java;JavaScript;Python;TypeScript", "C#", "HTML/CSS;Java;JavaScript;PowerShell;Python;SQL;TypeScript", "C++;HTML/CSS;JavaScript;Lua;Python", ...]
-  DatabaseHaveWorkedWith string ["NA", "Dynamodb;MongoDB;PostgreSQL", "Firebase Realtime Database", "MongoDB;MySQL;PostgreSQL;SQLite", "PostgreSQL;SQLite", ...]
-  DatabaseWantToWorkWith string ["NA", "PostgreSQL", "Firebase Realtime Database", "MongoDB;MySQL;PostgreSQL", "PostgreSQL;SQLite", ...]
-  DatabaseAdmired string ["NA", "PostgreSQL", "Firebase Realtime Database", "MongoDB;MySQL;PostgreSQL", "PostgreSQL;SQLite", ...]
-  PlatformHaveWorkedWith string ["NA", "Amazon Web Services (AWS);Heroku;Netlify", "Google Cloud", "Amazon Web Services (AWS);Fly.io;Heroku", "NA", ...]
-  PlatformWantToWorkWith string ["NA", "Amazon Web Services (AWS);Heroku;Netlify", "Google Cloud", "Amazon Web Services (AWS);Vercel", "NA", ...]
-  PlatformAdmired string ["NA", "Amazon Web Services (AWS);Heroku;Netlify", "Google Cloud", "Amazon Web Services (AWS)", "NA", ...]
-  WebframeHaveWorkedWith string ["NA", "Express;Next.js;Node.js;React", "ASP.NET CORE", "jQuery;Next.js;Node.js;React;WordPress", "NA", ...]
-  WebframeWantToWorkWith string ["NA", "Express;Htmx;Node.js;React;Remix", "ASP.NET CORE", "jQuery;Next.js;Node.js;React", "NA", ...]
-  WebframeAdmired string ["NA", "Express;Node.js;React", "ASP.NET CORE", "jQuery;Next.js;Node.js;React", "NA", ...]
-  EmbeddedHaveWorkedWith string ["NA", "NA", "Rasberry Pi", "Rasberry Pi", "CMake;Cargo;Rasberry Pi", ...]
-  EmbeddedWantToWorkWith string ["NA", "NA", "Rasberry Pi", "NA", "CMake;Rasberry Pi", ...]
-  EmbeddedAdmired string ["NA", "NA", "Rasberry Pi", "NA", "CMake;Rasberry Pi", ...]
-  MiscTechHaveWorkedWith string ["NA", "NA", ".NET (5+) ;.NET Framework (1.0 - 4.8);.NET MAUI", "NumPy;Pandas;Ruff;TensorFlow", "NA", ...]
-  MiscTechWantToWorkWith string ["NA", "NA", ".NET (5+) ;.NET Framework (1.0 - 4.8);.NET MAUI", "NA", "NA", ...]
-  MiscTechAdmired string ["NA", "NA", ".NET (5+) ;.NET Framework (1.0 - 4.8);.NET MAUI", "NA", "NA", ...]
-  ToolsTechHaveWorkedWith string ["NA", "Docker;Homebrew;Kubernetes;npm;Vite;Webpack", "MSBuild", "Docker;npm;Pip", "APT;Make;npm", ...]
-  ToolsTechWantToWorkWith string ["NA", "Docker;Homebrew;Kubernetes;npm;Vite;Webpack", "MSBuild", "Docker;Kubernetes;npm", "APT;Make", ...]
-  ToolsTechAdmired string ["NA", "Docker;Homebrew;Kubernetes;npm;Vite;Webpack", "MSBuild", "Docker;npm", "APT;Make", ...]
-  NEWCollabToolsHaveWorkedWith string ["NA", "PyCharm;Visual Studio Code;WebStorm", "Visual Studio", "NA", "Vim", ...]
-  NEWCollabToolsWantToWorkWith string ["NA", "PyCharm;Visual Studio Code;WebStorm", "Visual Studio", "NA", "Vim", ...]
-  NEWCollabToolsAdmired string ["NA", "PyCharm;Visual Studio Code;WebStorm", "Visual Studio", "NA", "Vim", ...]
-  OpSysPersonal use string ["NA", "MacOS;Windows", "Windows", "NA", "Other (please specify):", ...]
-  OpSysProfessional use string ["NA", "MacOS", "Windows", "NA", nil, ...]
-  OfficeStackAsyncHaveWorkedWith string ["NA", "NA", "NA", "NA", "GitHub Discussions;Markdown File;Obsidian;Stack Overflow for Teams", ...]
-  OfficeStackAsyncWantToWorkWith string ["NA", "NA", "NA", "NA", "GitHub Discussions;Markdown File;Obsidian", ...]
-  OfficeStackAsyncAdmired string ["NA", "NA", "NA", "NA", "GitHub Discussions;Markdown File;Obsidian", ...]
-  OfficeStackSyncHaveWorkedWith string ["NA", "Microsoft Teams;Slack", "Google Chat;Google Meet;Microsoft Teams;Zoom", "NA", "Discord;Whatsapp", ...]
-  OfficeStackSyncWantToWorkWith string ["NA", "Slack", "Google Chat;Google Meet;Zoom", "NA", "Discord;Whatsapp", ...]
-  OfficeStackSyncAdmired string ["NA", "Slack", "Google Chat;Google Meet;Zoom", "NA", "Discord;Whatsapp", ...]
-  AISearchDevHaveWorkedWith string ["NA", "NA", "NA", "NA", "NA", ...]
-  AISearchDevWantToWorkWith string ["NA", "NA", "NA", "NA", "NA", ...]
-  AISearchDevAdmired string ["NA", "NA", "NA", "NA", "NA", ...]
-  NEWSOSites string ["I have never visited Stack Overflow or the Stack Exchange network", "Stack Overflow for Teams (private knowledge sharing & collaboration platform for companies);Stack Overflow;Stack Exchange", "Stack Overflow;Stack Exchange;Stack Overflow Blog or Podcast", "Stack Overflow", "Stack Overflow for Teams (private knowledge sharing & collaboration platform for companies);Stack Overflow;Stack Exchange", ...]
-  SOVisitFreq string ["NA", "Multiple times per day", "Multiple times per day", "Daily or almost daily", "Multiple times per day", ...]
-  SOAccount string ["NA", "Yes", "Yes", "No", "Yes", ...]
-  SOPartFreq string ["NA", "Multiple times per day", "Multiple times per day", "NA", "Multiple times per day", ...]
-  SOHow string ["NA", "Quickly finding code solutions;Finding reliable guidance from community-vetted answers;Showcase expertise with code solutions;Engage with community by commenting on questions and answers or voting on questions and answers", "Quickly finding code solutions;Finding reliable guidance from community-vetted answers;Showcase expertise with code solutions;Engage with community by commenting on questions and answers or voting on questions and answers;Learning new-to-me technology/techniques;Learning new-to-everyone technology/techniques", "Quickly finding code solutions", "Quickly finding code solutions;Engage with community by commenting on questions and answers or voting on questions and answers;Learning new-to-me technology/techniques;Other (please specify):", ...]
-  SOComm string ["NA", "Yes, definitely", "Yes, definitely", "No, not really", "Yes, definitely", ...]
-  AISelect string ["Yes", "No, and I don't plan to", "No, and I don't plan to", "Yes", "No, and I don't plan to", ...]
-  AISent string ["Very favorable", "NA", "NA", "Very favorable", "NA", ...]
-  AIBen string ["Increase productivity", "NA", "NA", "Increase productivity;Greater efficiency;Improve collaboration;Speed up learning;Improve accuracy in coding", "NA", ...]
-  AIAcc string ["NA", "NA", "NA", "Somewhat trust", "NA", ...]
-  AIComplex string ["NA", "NA", "NA", "Bad at handling complex tasks", "NA", ...]
-  AIToolCurrently Using string ["NA", "NA", "NA", "Learning about a codebase;Project planning;Writing code;Documenting code;Debugging and getting help;Deployment and monitoring;Search for answers;Generating content or synthetic data", "NA", ...]
-  AIToolInterested in Using string ["NA", "NA", "NA", "Testing code;Committing and reviewing code;Predictive analytics", "NA", ...]
-  AIToolNot interested in Using string ["NA", "NA", "NA", nil, "NA", ...]
-  AINextMuch more integrated string ["NA", "NA", "NA", "Learning about a codebase;Project planning;Writing code;Documenting code;Debugging and getting help;Deployment and monitoring;Search for answers;Generating content or synthetic data", "NA", ...]
-  AINextNo change string ["NA", "NA", "NA", nil, "NA", ...]
-  AINextMore integrated string ["NA", "NA", "NA", nil, "NA", ...]
-  AINextLess integrated string ["NA", "NA", "NA", nil, "NA", ...]
-  AINextMuch less integrated string ["NA", "NA", "NA", nil, "NA", ...]
-  AIThreat string ["NA", "NA", "NA", "No", "NA", ...]
-  AIEthics string ["NA", "NA", "NA", "Circulating misinformation or disinformation;Missing or incorrect attribution for sources of data", "NA", ...]
-  AIChallenges string ["NA", "NA", "NA", "Don’t trust the output or answers", "NA", ...]
-  TBranch string ["No", "Yes", "No", "NA", "NA", ...]
-  ICorPM string ["NA", "Individual contributor", "NA", "NA", "NA", ...]
-  WorkExp string ["NA", "17", "NA", "NA", "NA", ...]
-  Knowledge_1 string ["NA", "Agree", "NA", "NA", "NA", ...]
-  Knowledge_2 string ["NA", "Disagree", "NA", "NA", "NA", ...]
-  Knowledge_3 string ["NA", "Agree", "NA", "NA", "NA", ...]
-  Knowledge_4 string ["NA", "Agree", "NA", "NA", "NA", ...]
-  Knowledge_5 string ["NA", "Agree", "NA", "NA", "NA", ...]
-  Knowledge_6 string ["NA", "Neither agree nor disagree", "NA", "NA", "NA", ...]
-  Knowledge_7 string ["NA", "Disagree", "NA", "NA", "NA", ...]
-  Knowledge_8 string ["NA", "Agree", "NA", "NA", "NA", ...]
-  Knowledge_9 string ["NA", "Agree", "NA", "NA", "NA", ...]
-  Frequency_1 string ["NA", "NA", "NA", "NA", "NA", ...]
-  Frequency_2 string ["NA", "NA", "NA", "NA", "NA", ...]
-  Frequency_3 string ["NA", "NA", "NA", "NA", "NA", ...]
-  TimeSearching string ["NA", "NA", "NA", "NA", "NA", ...]
-  TimeAnswering string ["NA", "NA", "NA", "NA", "NA", ...]
-  Frustration string ["NA", "NA", "NA", "NA", "NA", ...]
-  ProfessionalTech string ["NA", "NA", "NA", "NA", "NA", ...]
-  ProfessionalCloud string ["NA", "NA", "NA", "NA", "NA", ...]
-  ProfessionalQuestion string ["NA", "NA", "NA", "NA", "NA", ...]
-  Industry string ["NA", "NA", "NA", "NA", "NA", ...]
-  JobSatPoints_1 string ["NA", "0", "NA", "NA", "NA", ...]
-  JobSatPoints_4 string ["NA", "0", "NA", "NA", "NA", ...]
-  JobSatPoints_5 string ["NA", "0", "NA", "NA", "NA", ...]
-  JobSatPoints_6 string ["NA", "0", "NA", "NA", "NA", ...]
-  JobSatPoints_7 string ["NA", "0", "NA", "NA", "NA", ...]
-  JobSatPoints_8 string ["NA", "0", "NA", "NA", "NA", ...]
-  JobSatPoints_9 string ["NA", "0", "NA", "NA", "NA", ...]
-  JobSatPoints_10 string ["NA", "0", "NA", "NA", "NA", ...]
-  JobSatPoints_11 string ["NA", "0", "NA", "NA", "NA", ...]
-  SurveyLength string ["NA", "NA", "Appropriate in length", "Too long", "Too short", ...]
-  SurveyEase string ["NA", "NA", "Easy", "Easy", "Easy", ...]
-  ConvertedCompYearly string ["NA", "NA", "NA", "NA", "NA", ...]
-  JobSat string ["NA", "NA", "NA", "NA", "NA", ...]
->
+Kino.nothing()
 ```
 
 ## Professional developers by age
@@ -173,12 +41,6 @@ There's a hypthoseis that developers in the Elixir community leans toward older 
 
 ```elixir
 require Explorer.DataFrame
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-Explorer.DataFrame
 ```
 
 ```elixir
@@ -224,7 +86,17 @@ Kino.nothing()
 ```
 
 ```elixir
-Kino.Layout.grid(vl_specs, columns: 2)
+import Kino.Shorts
+```
+
+```elixir
+grid(
+  [
+    markdown("## Professional developers by age"),
+    Kino.Layout.grid(vl_specs, columns: 2)
+  ],
+  boxed: true
+)
 ```
 
 ## Professional developers by years coding (NOT including education)
@@ -266,5 +138,13 @@ Kino.nothing()
 ```
 
 ```elixir
-Kino.Layout.grid(vl_specs, columns: 2)
+grid(
+  [
+    markdown("## Professional developers by years coding (NOT including education)"),
+    Kino.Layout.grid(vl_specs, columns: 2)
+  ],
+  boxed: true
+)
 ```
+
+<!-- livebook:{"offset":3859,"stamp":{"token":"XCP.xhIxpRNfuck3NZwQLCtQRhcSWzZ2yWiex1xOiAk1gf3mj8ou-9i5zKSO9D0Zgpfc3fOp_mzrWVJkF5L2YjPTXp7g03dvK06HrFyOpL2QurilwxOrKni9mHpc","version":2}} -->
