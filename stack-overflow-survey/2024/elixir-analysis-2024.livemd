@@ -44,6 +44,69 @@ require Explorer.DataFrame
 ```
 
 ```elixir
+Tucan.scatter(:iris, "petal_width", "petal_length")
+|> Tucan.Axes.set_offset(:y, 10)
+|> Tucan.Grid.set_enabled(false)
+|> VegaLite.to_spec()
+```
+
+```elixir
+language = "Elixir"
+
+developers =
+  data
+  |> Explorer.DataFrame.select(["YearsCodePro", "LanguageHaveWorkedWith", "Age"])
+  |> Explorer.DataFrame.filter(col("YearsCodePro") != "NA")
+  |> Explorer.DataFrame.mutate([
+    {^language, contains(col("LanguageHaveWorkedWith"), ^language)}
+  ])
+
+VegaLite.new(title: "Profesional #{language} developers by age", width: 400, height: 200)
+|> VegaLite.data_from_values(developers)
+|> VegaLite.transform(filter: "datum.#{language} == true")
+|> VegaLite.transform(aggregate: [[op: "count", field: "Age", as: "count"]], groupby: ["Age"])
+|> VegaLite.transform(
+  window: [[op: "sum", field: "count", as: "total_count"]],
+  frame: [nil, nil]
+)
+|> VegaLite.transform(calculate: "(datum.count / datum.total_count)", as: "percentage")
+|> Tucan.layers([
+  Tucan.new()
+  |> Tucan.bar("Age", "percentage",
+    tooltip: true,
+    x: [
+      axis: [label_font_size: 14, label_angle: -60],
+      sort: [
+        "Under 18 years old",
+        "18-24 years old",
+        "25-34 years old",
+        "35-44 years old",
+        "45-54 years old",
+        "55-64 years old",
+        "65 years or older",
+        "Prefer not to say"
+      ]
+    ],
+    y: [
+      axis: [format: ".0%", title: nil],
+      scale: [domain: [0, 0.45]]
+    ]
+  ),
+  VegaLite.new()
+  |> VegaLite.transform(calculate: "'(n = ' + format(datum.total_count, ',') + ')'", as: "formatted_count")
+  |> VegaLite.mark(:text,
+    color: "grey",
+    font_size: 14,
+    font_weight: "200",
+    dx: -50
+  )
+  |> VegaLite.encode_field(:text, "formatted_count")
+  |> VegaLite.encode(:x, value: "width")
+  |> VegaLite.encode(:y, value: 20)
+])
+```
+
+```elixir
 vl_specs =
   Enum.map(["Elixir", "Ruby", "Python", "JavaScript", "Go"], fn language ->
     developers =
@@ -62,24 +125,44 @@ vl_specs =
       window: [[op: "sum", field: "count", as: "total_count"]],
       frame: [nil, nil]
     )
-    |> VegaLite.transform(calculate: "(datum.count / datum.total_count) * 100", as: "percentage")
-    |> Tucan.bar("Age", "percentage",
-      tooltip: true,
-      x: [
-        axis: [label_font_size: 14, label_angle: -60],
-        sort: [
-          "Under 18 years old",
-          "18-24 years old",
-          "25-34 years old",
-          "35-44 years old",
-          "45-54 years old",
-          "55-64 years old",
-          "65 years or older",
-          "Prefer not to say"
+    |> VegaLite.transform(calculate: "(datum.count / datum.total_count)", as: "percentage")
+    |> Tucan.layers([
+      Tucan.new()
+      |> Tucan.bar("Age", "percentage",
+        tooltip: true,
+        x: [
+          axis: [label_font_size: 14, label_angle: -60],
+          sort: [
+            "Under 18 years old",
+            "18-24 years old",
+            "25-34 years old",
+            "35-44 years old",
+            "45-54 years old",
+            "55-64 years old",
+            "65 years or older",
+            "Prefer not to say"
+          ]
+        ],
+        y: [
+          axis: [format: ".0%", title: nil],
+          scale: [domain: [0, 0.45]]
         ]
-      ],
-      y: [scale: [domain: [0, 45]]]
-    )
+      ),
+      VegaLite.new()
+      |> VegaLite.transform(
+        calculate: "'(n = ' + format(datum.total_count, ',') + ')'",
+        as: "formatted_count"
+      )
+      |> VegaLite.mark(:text,
+        color: "grey",
+        font_size: 14,
+        font_weight: "200",
+        dx: -50
+      )
+      |> VegaLite.encode_field(:text, "formatted_count")
+      |> VegaLite.encode(:x, value: "width")
+      |> VegaLite.encode(:y, value: 20)
+    ])
   end)
 
 Kino.nothing()
@@ -119,19 +202,37 @@ vl_specs =
     )
     |> VegaLite.data_from_values(developers)
     |> VegaLite.transform(filter: "datum.#{language} == true")
-    |> Tucan.histogram("YearsCodePro",
-      step: 5,
-      relative: true,
-      tooltip: :data,
-      width: 400,
-      height: 200,
-      x: [
-        axis: [title_font_size: 14]
-      ],
-      y: [scale: [domain: [0, 0.35]]]
-    )
-    |> Tucan.Axes.set_x_title("Year coding professionallly, NOT including education")
-    |> Tucan.Axes.set_y_title("")
+    |> Tucan.layers([
+      Tucan.new()
+      |> Tucan.histogram("YearsCodePro",
+        step: 5,
+        relative: true,
+        tooltip: :data,
+        width: 400,
+        height: 200,
+        x: [
+          axis: [title_font_size: 14]
+        ],
+        y: [scale: [domain: [0, 0.35]]]
+      )
+      |> Tucan.Axes.set_x_title("Year coding professionallly, NOT including education")
+      |> Tucan.Axes.set_y_title(""),
+      VegaLite.new()
+      |> VegaLite.transform(aggregate: [[op: "count", as: "total_count"]])
+      |> VegaLite.transform(
+        calculate: "'(n = ' + format(datum.total_count, ',') + ')'",
+        as: "formatted_count"
+      )
+      |> VegaLite.mark(:text,
+        color: "grey",
+        font_size: 14,
+        font_weight: "200",
+        dx: -50
+      )
+      |> VegaLite.encode_field(:text, "formatted_count")
+      |> VegaLite.encode(:x, value: "width")
+      |> VegaLite.encode(:y, value: 20)
+    ])
   end)
 
 Kino.nothing()
@@ -147,4 +248,4 @@ grid(
 )
 ```
 
-<!-- livebook:{"offset":3859,"stamp":{"token":"XCP.xhIxpRNfuck3NZwQLCtQRhcSWzZ2yWiex1xOiAk1gf3mj8ou-9i5zKSO9D0Zgpfc3fOp_mzrWVJkF5L2YjPTXp7g03dvK06HrFyOpL2QurilwxOrKni9mHpc","version":2}} -->
+<!-- livebook:{"offset":6799,"stamp":{"token":"XCP.7jc0kbxgDAf9JzAKSyOLbfbFpspxVaf8ATRxPiS6C-txZR8HlvaRji9YCvA1Xt9B3ZYFgKwYYQ6XGeCXyOhICAlbZNywufWyLbaVzT1qvp5IYwo_M64_F1rp","version":2}} -->
