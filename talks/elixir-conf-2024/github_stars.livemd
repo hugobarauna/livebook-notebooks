@@ -170,5 +170,3 @@ end)
 layout_frame
 
 ```
-
-<!-- livebook:{"offset":4286,"stamp":{"token":"XCP.VglTza_kZO3DTNaa8gU7U_7MW-ZjnbVoh3E3yhZCmKsX-nIJ2_V7gWqwD2goYeUkhZdGL-RslPErdw9Ob7HF4KIXSRd33GLzxu-vVDJ14QPmqSXsZJXxlSCA4Ig","version":2}} -->
