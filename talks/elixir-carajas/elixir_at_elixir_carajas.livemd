@@ -1,0 +1,358 @@
+# Visão geral sobre Elixir para Elixir Carajás
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.15.3"}
+])
+```
+
+## Processes
+
+Na máquina virtual do Erlang, todo código roda dentro de uma unidade de execução chamada **"processo"**.
+
+Esse processo que roda dentro da VM do Erlang não é um processo do sistema operacional
+
+Um processo dentro do contexto da VM do Erlang é muito leve, podemos criar literalmente milhões deles dentro de uma instância da VM.
+
+```elixir
+# Vamos criar 1 milhão de processos
+
+for _ <- 1..1_000_000 do
+  spawn(fn -> :ok end)
+end
+```
+
+### Comunicação entre processos
+
+Processos se comunicam por passagem de mensagens, através das funções `send` e `receive`.
+
+```elixir
+# inicia um novo processo
+child_process_pid =
+  spawn(fn ->
+    receive do
+      {:ping, caller} ->
+        IO.puts("Processo #{inspect(self())} recebeu uma mensagem 'ping' do processo #{inspect(caller)}")
+
+        send(caller, {:pong, self()})
+
+        IO.puts(
+          "Processo #{inspect(self())} enviou uma mensagem 'pong' para o processo #{inspect(caller)}"
+        )
+    end
+  end)
+
+# pega o pid do processo rodando
+parent_process_pid = self()
+
+# envia uma mensagem para o processo child_process_pid
+send(child_process_pid, {:ping, parent_process_pid})
+
+IO.puts(
+  "Processo #{inspect(parent_process_pid)} enviou uma mensagem 'ping' para o processo #{inspect(child_process_pid)}"
+)
+
+# fica esperando receber uma mensagem
+receive do
+  {:pong, caller} ->
+    IO.puts("Processo #{inspect(self())} recebeu uma mensagem 'pong' do processo #{inspect(caller)}")
+end
+```
+
+O Livebook nos ajuda a visualizar a troca de mensagens entre processos:
+
+```elixir
+Kino.Process.render_seq_trace(fn ->
+  # inicia um novo processo
+  child_process_pid =
+    spawn(fn ->
+      receive do
+        {:ping, caller} -> send(caller, :pong)
+      end
+    end)
+
+  # pega o pid do processo rodando
+  parent_process_pid = self()
+
+  # envia uma mensagem para o processo child_process_pid
+  send(child_process_pid, {:ping, parent_process_pid})
+
+  receive do
+    :pong -> "received pong"
+  end
+end)
+```
+
+Vamos ver outro exemplo de visualização de troca de mensagem, dessa vez um pouco mais complexo.
+
+```elixir
+Kino.Process.render_seq_trace(fn ->
+  1..4
+  |> Task.async_stream(
+    fn _ -> Process.sleep(Enum.random(100..300)) end,
+    max_concurrency: 4
+  )
+  |> Stream.run()
+end)
+```
+
+## Supervisors
+
+Vamos criar um processo bem simples usando o módulo de "processos genéricos" da biblioteca padrão chamado `GenServer`.
+
+```elixir
+defmodule SimpleProcess do
+  use GenServer
+
+  def start_link(name) do
+    GenServer.start_link(__MODULE__, name, name: name)
+  end
+
+  def child_spec(init_arg) do
+    Supervisor.child_spec(
+      %{
+        id: init_arg,
+        start: {__MODULE__, :start_link, [init_arg]},
+        restart: :transient
+      },
+      []
+    )
+  end
+
+  @impl true
+  def init(name) do
+    Process.flag(:trap_exit, true)
+    IO.puts("Starting SimpleProcess: #{inspect(name)}")
+
+    {:ok, name}
+  end
+
+  @impl true
+  def terminate(_reason, name) do
+    IO.puts("Shutting down SimpleProcess: #{inspect(name)}")
+
+    :ok
+  end
+end
+```
+
+Vamos iniciar um supervisor e a partir dele iniciar e supervisionar dois processos do módulo `SimpleProcess`, nomeados por `:process_one` e `:process_two`.
+
+```elixir
+{:ok, supervisor_pid} =
+  Supervisor.start_link(
+    [
+      {SimpleProcess, :process_one},
+      {SimpleProcess, :process_two}
+    ],
+    strategy: :one_for_one,
+    name: :my_supervisor
+  )
+
+supervisor_pid
+```
+
+Vamos pegar o PID (process id) do `:process_one`.
+
+```elixir
+process_one_original_pid = Process.whereis(:process_one)
+```
+
+Agora, vamos desligar o `:process_one` e perceber que ele será reiniciado pelo seu **supervisor**.
+
+```elixir
+GenServer.stop(:process_one, :abnormal_reason)
+```
+
+```elixir
+supervisor_pid
+```
+
+Podemos confirmar que o processo original do `:process_one` foi desligado.
+
+```elixir
+Process.alive?(process_one_original_pid)
+```
+
+Podemos perceber que o PID do `:process_one` mudou, porque desligamos ele e ele foi reiniciado pelo seu supervisor
+
+```elixir
+process_pid_after_restart = Process.whereis(:process_one)
+
+IO.puts("Old pid: #{inspect(process_one_original_pid)}")
+IO.puts("New pid: #{inspect(process_pid_after_restart)}")
+```
+
+Porém, se desligarmos o `process_one` de modo **normal**, seu supervisor não irá reiniciá-lo, porque configuramos o módulo do `process_one` com a configuração `restart: :transient`, que indica que processos desse módulo só serão reiniciados pelo seu supervisor se forem terminados de modo fora do normal.
+
+```elixir
+GenServer.stop(:process_one, :normal)
+```
+
+Podemos visualizar a árvore de supervisão do `process_one` e confirmar que ele não foi reiniciado pelo seu supervisor.
+
+```elixir
+supervisor_pid
+```
+
+## Applications
+
+Uma **Application** em Elixir é um modo de "empacotar" um conjunto de processos e sua árvore de supervisão.
+
+Um sistema rodando na VM do Erlang costuma ter diversas **Applications**, que se comportam como componentes que podem ser iniciados e desligados de modo independente.
+
+Vamos listar as **Applications** que estão rodando.
+
+```elixir
+Application.started_applications()
+```
+
+Podemos utilizar o Livebook para visualizar a árvore de supervisão de uma aplicação. Por exemplo, da aplicação `kino`
+
+```elixir
+:kino
+```
+
+## Distributed
+
+### Location transparency
+
+<!-- livebook:{"break_markdown":true} -->
+
+<p style="color:#AC2A0F; font-style:italic;">
+Para seguir esta seção do notebook, você precisará ter Elixir instalado na sua máquina. Para instalar o Elixir, siga as <a href="https://elixir-lang.org/install.html">instruções no site</a> da linguagem.
+</p>
+
+---
+
+<!-- livebook:{"break_markdown":true} -->
+
+Quando um processo envia uma mensagem para outro processo, ele não se importa se o outro processo está rodando na mesma máquina ou em outra máquina rodando a Erlang VM.
+
+Esta é uma propriedade da VM do Erlang chamada **location transparency**.
+
+Vamos ver isso funcionando.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Primeiro, vamos ver um exemplo de troca de mensagens entre dois processos rodando no mesmo nó.
+
+```elixir
+# inicia um novo processo
+child_process_pid =
+  spawn(fn ->
+    receive do
+      :ping ->
+        IO.puts("Nó do processo que recebeu mensagem: #{node()}")
+    end
+  end)
+
+# envia uma mensagem para o processo child_process_pid
+send(child_process_pid, :ping)
+
+IO.puts(
+  "Nó do processo que enviou mensagem:  #{node()}"
+)
+
+Kino.nothing()
+```
+
+Agora, vamos conectar o **node** (nó) rodando o código deste notebook a um outro nó rodando uma VM do Erlang.
+
+Para isso, abra um terminal na sua máquina (assumindo que ela tem o Elixir instalado) e digite: `iex --name remote_node@127.0.0.1`
+
+Esse comando irá iniciar o shell do Elixir dentro de um nó da Erlang VM com o nome **remote_node**.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Copie e cole o seguinte código para dentro do seu IEx.
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+IO.puts(node())
+IO.puts(Node.get_cookie())
+```
+
+Esse código irá imprimir o nome completo do nó e o seu cookie:
+
+*O cookie, dentro do contexto da Erlang VM, é uma espécie de chave de autenticação compartilhada que é usada para permitir que nós da Erlang VM se comuniquem uns com os outros.*
+
+<!-- livebook:{"break_markdown":true} -->
+
+Execute a célula a seguir e copie e cole o nome do nó o o seu cookie para os campos que irão aparecer.
+
+Ao executar a célula abaixo:
+
+* o nome do nó que você iniciou com o IEx será salvo na variável `remote_node`
+* o nó rodando o código desse notebook irá se conectar com o nó do seu IEx
+
+```elixir
+remote_node =
+  Kino.Input.text("Node")
+  |> Kino.render()
+  |> Kino.Input.read()
+  |> String.to_atom()
+
+cookie =
+  Kino.Input.text("Cookie")
+  |> Kino.render()
+  |> Kino.Input.read()
+  |> String.to_atom()
+
+Node.set_cookie(remote_node, cookie)
+```
+
+Agora com os nós conectados, poderemos fazer um experimento que irá mostrar como a troca de mensagens entre dois processos independe do nó onde os procesos estão rodando.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Vamos enviar uma mensagem para um processo rodando no node do IEx, o `remote_node`.
+
+```elixir
+# inicia um novo processo
+child_process_pid =
+  Node.spawn(remote_node, fn ->
+    receive do
+      :ping ->
+        IO.puts("Nó do processo que recebeu mensagem: #{node()}")
+    end
+  end)
+
+# envia uma mensagem para o processo child_process_pid
+send(child_process_pid, :ping)
+
+IO.puts(
+  "Nó do processo que enviou mensagem:  #{node()}"
+)
+
+Kino.nothing()
+```
+
+### Chamando uma função de um módulo definido em um outro nó
+
+<!-- livebook:{"break_markdown":true} -->
+
+Vamos aprender como rodar uma função de um módulo definido em outro nó.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Primeiro, copie e cole o seguinte módulo no IEx que você está executando no seu terminal:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+defmodule Distributed do
+  def hello_world do
+    IO.puts("Hello world from another node!")
+  end
+end
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+Agora vamos usar o módulo de remote procedure call da biblioteca padrão do erlang, o `:erpc` para executar a função `hello_world`, do módulo `Distributed` no nó `remote_node`.
+
+```elixir
+:erpc.call(remote_node, Distributed, :hello_world, [])
+```
