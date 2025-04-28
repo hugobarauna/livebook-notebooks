@@ -6,7 +6,11 @@ Mix.install([
 ])
 ```
 
-## Processes
+## .
+
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fhugobarauna%2Flivebook-notebooks%2Fblob%2Fmain%2Ftalks%2Felixir-carajas%2Felixir_at_elixir_carajas.livemd)
+
+## Process
 
 Na máquina virtual do Erlang, todo código roda dentro de uma unidade de execução chamada **"processo"**.
 
@@ -96,7 +100,7 @@ Kino.Process.render_seq_trace(fn ->
 end)
 ```
 
-## Supervisors
+## Supervisor
 
 Vamos criar um processo bem simples usando o módulo de "processos genéricos" da biblioteca padrão chamado `GenServer`.
 
@@ -195,7 +199,7 @@ Podemos visualizar a árvore de supervisão do `process_one` e confirmar que ele
 supervisor_pid
 ```
 
-## Applications
+## Application
 
 Uma **Application** em Elixir é um modo de "empacotar" um conjunto de processos e sua árvore de supervisão.
 
