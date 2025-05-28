@@ -258,48 +258,24 @@ Kino.nothing()
 
 Agora, vamos conectar o **node** (nó) rodando o código deste notebook a um outro nó rodando uma VM do Erlang.
 
-Para isso, abra um terminal na sua máquina (assumindo que ela tem o Elixir instalado) e digite: `iex --name remote_node@127.0.0.1`
+Para isso, abra um terminal na sua máquina (assumindo que ela tem o Elixir instalado) e digite:
 
-Esse comando irá iniciar o shell do Elixir dentro de um nó da Erlang VM com o nome **remote_node**.
-
-<!-- livebook:{"break_markdown":true} -->
-
-Copie e cole o seguinte código para dentro do seu IEx.
-
-<!-- livebook:{"force_markdown":true} -->
-
-```elixir
-IO.puts(node())
-IO.puts(Node.get_cookie())
+```
+iex --name remote_node@127.0.0.1 --cookie secret
 ```
 
-Esse código irá imprimir o nome completo do nó e o seu cookie:
-
-*O cookie, dentro do contexto da Erlang VM, é uma espécie de chave de autenticação compartilhada que é usada para permitir que nós da Erlang VM se comuniquem uns com os outros.*
+Esse comando irá iniciar o shell do Elixir (iex) dentro de um nó da Erlang VM, configurando o nome do node como **remote_node** e o valor do cookie para **secret**.
 
 <!-- livebook:{"break_markdown":true} -->
 
-Execute a célula a seguir e copie e cole o nome do nó o o seu cookie para os campos que irão aparecer.
-
-Ao executar a célula abaixo:
-
-* o nome do nó que você iniciou com o IEx será salvo na variável `remote_node`
-* o nó rodando o código desse notebook irá se conectar com o nó do seu IEx
+Iniciado o `iex` na sua máquina, execute a célula abaixo para conectar o node onde está rodando este notebook com o node onde está rodando o `iex`.
 
 ```elixir
-remote_node =
-  Kino.Input.text("Node")
-  |> Kino.render()
-  |> Kino.Input.read()
-  |> String.to_atom()
+remote_node = :"remote_node@127.0.0.1"
+remote_cookie = :secret
 
-cookie =
-  Kino.Input.text("Cookie")
-  |> Kino.render()
-  |> Kino.Input.read()
-  |> String.to_atom()
-
-Node.set_cookie(remote_node, cookie)
+Node.set_cookie(remote_cookie)
+Node.connect(remote_node)
 ```
 
 Agora com os nós conectados, poderemos fazer um experimento que irá mostrar como a troca de mensagens entre dois processos independe do nó onde os procesos estão rodando.
