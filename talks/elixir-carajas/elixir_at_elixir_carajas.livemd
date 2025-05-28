@@ -82,7 +82,7 @@ Kino.Process.render_seq_trace(fn ->
   send(child_process_pid, {:ping, parent_process_pid})
 
   receive do
-    :pong -> "received pong"
+    :pong -> "recebi pong"
   end
 end)
 ```
@@ -100,104 +100,99 @@ Kino.Process.render_seq_trace(fn ->
 end)
 ```
 
+<!-- livebook:{"branch_parent_index":0} -->
+
 ## Supervisor
 
-Vamos criar um processo bem simples usando o módulo de "processos genéricos" da biblioteca padrão chamado `GenServer`.
+Vamos criar dois processos bem simples usando o módulo de "processos genéricos" da biblioteca padrão chamado `GenServer`.
 
 ```elixir
-defmodule SimpleProcess do
+defmodule Web do
   use GenServer
 
-  def start_link(name) do
-    GenServer.start_link(__MODULE__, name, name: name)
+  def start_link(_) do
+    GenServer.start_link(Web, [], name: Web)
   end
 
-  def child_spec(init_arg) do
-    Supervisor.child_spec(
-      %{
-        id: init_arg,
-        start: {__MODULE__, :start_link, [init_arg]},
-        restart: :transient
-      },
-      []
-    )
-  end
+  def init([]) do
+    IO.puts("Processo Web foi iniciado")
 
-  @impl true
-  def init(name) do
-    Process.flag(:trap_exit, true)
-    IO.puts("Starting SimpleProcess: #{inspect(name)}")
-
-    {:ok, name}
-  end
-
-  @impl true
-  def terminate(_reason, name) do
-    IO.puts("Shutting down SimpleProcess: #{inspect(name)}")
-
-    :ok
+    {:ok, []}
   end
 end
 ```
 
-Vamos iniciar um supervisor e a partir dele iniciar e supervisionar dois processos do módulo `SimpleProcess`, nomeados por `:process_one` e `:process_two`.
+```elixir
+defmodule DB do
+  use GenServer, restart: :transient
+
+  def start_link(_) do
+    GenServer.start_link(DB, [], name: DB)
+  end
+
+  def init([]) do
+    IO.puts("Processo DB foi iniciado")
+
+    {:ok, []}
+  end
+end
+```
+
+Vamos iniciar um supervisor e a partir dele iniciar e supervisionar dois processos, um `Web` e um `DB`.
 
 ```elixir
-{:ok, supervisor_pid} =
+{:ok, my_supervisor_pid} =
   Supervisor.start_link(
-    [
-      {SimpleProcess, :process_one},
-      {SimpleProcess, :process_two}
-    ],
+    [Web, DB],
     strategy: :one_for_one,
     name: :my_supervisor
   )
 
-supervisor_pid
+my_supervisor_pid
 ```
 
-Vamos pegar o PID (process id) do `:process_one`.
+Vamos pegar o PID (process id) do processo `DB`.
 
 ```elixir
-process_one_original_pid = Process.whereis(:process_one)
+db_original_pid = Process.whereis(DB)
 ```
 
-Agora, vamos desligar o `:process_one` e perceber que ele será reiniciado pelo seu **supervisor**.
+Agora, vamos simular que o processo `DB` morreu com uma causa fora do normal.
+
+Para isso vamos desligar esse processo com a função `GenServer.stop`, passando o nome do processo `DB` e usando o motivo `:abnormal_reason`
 
 ```elixir
-GenServer.stop(:process_one, :abnormal_reason)
+GenServer.stop(DB, :abnormal_reason)
 ```
+
+Podemos confirmar que o processo `DB` original está morto.
 
 ```elixir
-supervisor_pid
+Process.alive?(db_original_pid)
 ```
 
-Podemos confirmar que o processo original do `:process_one` foi desligado.
+Podemos perceber que o PID do processo `DB` mudou, porque ele foi desligado e depois reiniciado pelo seu supervisor.
 
 ```elixir
-Process.alive?(process_one_original_pid)
+db_pid_after_restart = Process.whereis(DB)
+
+IO.puts("PID antigo do processo DB: #{inspect(db_original_pid)}")
+IO.puts("PID novo do processo DB: #{inspect(db_pid_after_restart)}")
 ```
 
-Podemos perceber que o PID do `:process_one` mudou, porque desligamos ele e ele foi reiniciado pelo seu supervisor
+Porém, se desligarmos o processo `DB` de modo **normal**, seu supervisor não irá reiniciá-lo, porque configuramos o módulo do `DB` com a configuração `restart: :transient`, que indica que processos desse módulo só serão reiniciados pelo seu supervisor se forem terminados de modo fora do normal.
 
 ```elixir
-process_pid_after_restart = Process.whereis(:process_one)
-
-IO.puts("Old pid: #{inspect(process_one_original_pid)}")
-IO.puts("New pid: #{inspect(process_pid_after_restart)}")
+GenServer.stop(DB, :normal)
 ```
 
-Porém, se desligarmos o `process_one` de modo **normal**, seu supervisor não irá reiniciá-lo, porque configuramos o módulo do `process_one` com a configuração `restart: :transient`, que indica que processos desse módulo só serão reiniciados pelo seu supervisor se forem terminados de modo fora do normal.
+Podemos visualizar a árvore de supervisão do supervisor `my_supervisor` e confirmar que o processo `DB` não foi reiniciado pelo seu supervisor.
 
 ```elixir
-GenServer.stop(:process_one, :normal)
+Kino.Process.render_sup_tree(my_supervisor_pid)
 ```
 
-Podemos visualizar a árvore de supervisão do `process_one` e confirmar que ele não foi reiniciado pelo seu supervisor.
-
-```elixir
-supervisor_pid
-```
+<!-- livebook:{"branch_parent_index":0} -->
 
 ## Application
 
