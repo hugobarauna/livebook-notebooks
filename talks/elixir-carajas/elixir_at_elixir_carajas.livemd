@@ -209,7 +209,7 @@ Application.started_applications()
 Podemos utilizar o Livebook para visualizar a árvore de supervisão de uma aplicação. Por exemplo, da aplicação `kino`
 
 ```elixir
-:kino
+Kino.Process.render_app_tree(:kino)
 ```
 
 ## Distributed
