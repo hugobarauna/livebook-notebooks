@@ -1,0 +1,180 @@
+# Teams Server
+
+```elixir
+Mix.install([
+  {:phoenix_playground, "~> 0.1.7"},
+  {:kino, "~> 0.15.3"},
+  {:livebook_proto,
+   github: "hugobarauna/livebook-notebooks", sparse: "talks/alchemyconf/livebook_proto"},
+])
+
+require Logger
+```
+
+## Server
+
+```elixir
+defmodule Teams.ClientsTracker do
+  use Phoenix.Tracker
+
+  @default_options [
+    name: __MODULE__,
+    pubsub_server: PhoenixPlayground.PubSub
+  ]
+
+  @topic "teams-clients"
+
+  def start_link(opts \\ []) do
+    opts = Keyword.merge(@default_options, opts)
+    Phoenix.Tracker.start_link(__MODULE__, opts, opts)
+  end
+
+  def track(org_name) do
+    key = random_string()
+    Phoenix.Tracker.track(__MODULE__, self(), @topic, key, %{org_name: org_name})
+  end
+
+  def list do
+    Phoenix.Tracker.list(__MODULE__, @topic)
+  end
+
+  @impl true
+  def init(opts) do
+    server = Keyword.fetch!(opts, :pubsub_server)
+    {:ok, %{pubsub_server: server, node_name: Phoenix.PubSub.node_name(server)}}
+  end
+
+  @impl true
+  def handle_diff(diff, state) do
+    for {_topic, {joins, leaves}} <- diff do
+      for {key, meta} <- joins do
+        Logger.debug("[SERVER] presence join: key '#{key}' with meta #{inspect(meta)}")
+      end
+
+      for {key, meta} <- leaves do
+        Logger.debug("[SERVER] presence leave: key '#{key}' with meta #{inspect(meta)}")
+      end
+    end
+
+    {:ok, state}
+  end
+
+  defp random_string() do
+    :crypto.strong_rand_bytes(8)
+    |> Base.url_encode64(padding: false)
+  end
+end
+```
+
+```elixir
+defmodule UserSocket do
+  @behaviour Phoenix.Socket.Transport
+
+  @impl true
+  def child_spec(_opts) do
+    # We won't spawn any process, so let's ignore the child spec
+    :ignore
+  end
+
+  @impl true
+  def connect(%{connect_info: %{x_headers: x_headers}}) do
+    org_name = get_header(x_headers, "x-org-name")
+    Logger.debug("[SERVER] Received WebSocket connection with org name: #{org_name}")
+    Teams.ClientsTracker.track(org_name)
+
+    {:ok, %{org_name: org_name}}
+  end
+
+  @impl true
+  def init(state) do
+    Phoenix.PubSub.subscribe(PhoenixPlayground.PubSub, "org_events:#{state.org_name}")
+    
+    message = build_client_connected_message(state.org_name)
+    send(self(), {:message, message})
+
+    {:ok, state}
+  end
+
+  defp build_client_connected_message(_org_name) do
+    env_var = %LivebookProto.EnvironmentVariable{name: "foo", value: "some value"}
+    client_connected = %LivebookProto.ClientConnected{env_vars: [env_var]}
+    event = %LivebookProto.Event{type: {:client_connected, client_connected}}
+
+    LivebookProto.Event.encode(event)
+  end
+
+  @impl true
+  def handle_info({:message, message}, state) do
+    Logger.debug("[SERVER] Sending WebSocket message to client: #{inspect(message)}")
+    {:push, {:binary, message}, state}
+  end
+
+  @impl true
+  def handle_in({_message, _opts}, state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def terminate(_reason, _state) do
+    :ok
+  end
+
+  defp get_header(headers, key) do
+    for {^key, value} <- headers, do: value
+  end
+end
+```
+
+```elixir
+defmodule Teams.Endpoint do
+  use Phoenix.Endpoint, otp_app: :phoenix_playground
+
+  socket("/user", UserSocket, websocket: [connect_info: [:x_headers]])
+end
+```
+
+```elixir
+{:ok, phx_playground_pid} =
+  PhoenixPlayground.start(endpoint: Teams.Endpoint, port: 4701, open_browser: false)
+
+Kino.start_child!(Teams.ClientsTracker)
+```
+
+```elixir
+import Kino.Shorts
+
+build_event = fn :env_var_created, env_var ->
+  env_var = %LivebookProto.EnvironmentVariable{name: env_var.name, value: env_var.value}
+  env_var_created = %LivebookProto.EnvironmentVariableCreated{env_var: env_var}
+  event = %LivebookProto.Event{type: {:env_var_created, env_var_created}}
+
+  LivebookProto.Event.encode(event)
+end
+
+feedback_frame = Kino.Frame.new(placeholder: false)
+
+form =
+  Kino.Control.form(
+    [
+      org_name: Kino.Input.text("Org name", default: "dashbit"),
+      name: Kino.Input.text("Name"),
+      value: Kino.Input.text("Value")
+    ],
+    submit: "Create"
+  )
+
+Kino.listen(form, fn form_event ->
+  %{data: %{org_name: org_name, name: name, value: value}} = form_event
+  Kino.Frame.render(feedback_frame, Kino.Text.new("env var created", style: [color: :green]))
+
+  message = build_event.(:env_var_created, %{name: name, value: value})
+
+  Phoenix.PubSub.broadcast!(
+    PhoenixPlayground.PubSub,
+    "org_events:#{org_name}",
+    {:message, message}
+  )
+end)
+
+grid([markdown("### New env var"), feedback_frame, form], boxed: true)
+```
