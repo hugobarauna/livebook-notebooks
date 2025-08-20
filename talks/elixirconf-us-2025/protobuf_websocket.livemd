@@ -206,6 +206,7 @@ defmodule Teams.Connection do
     {:ok, state}
   end
 
+  # Received a binary message
   def handle_frame({:binary, msg}, state) do
     Logger.debug("[CLIENT] Received WebSocket binary message: #{inspect(msg)}")
 
@@ -218,6 +219,7 @@ defmodule Teams.Connection do
     {:ok, state}
   end
 
+  # Received a message
   def handle_frame({type, msg}, state) do
     IO.puts("Received Message - Type: #{inspect(type)} -- Message: #{inspect(msg)}")
     {:ok, state}
