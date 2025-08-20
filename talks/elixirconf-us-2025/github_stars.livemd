@@ -1,4 +1,4 @@
-<!-- livebook:{"app_settings":{"access_type":"public","output_type":"rich","show_source":true,"slug":"github-stars"},"deployment_group_id":"282","hub_id":"team-demos"} -->
+<!-- livebook:{"app_settings":{"access_type":"public","output_type":"rich","show_source":true,"slug":"github-stars"},"deployment_group_id":"199","hub_id":"team-demos"} -->
 
 # Counting GitHub Stars
 
@@ -306,4 +306,4 @@ In this tutorial, we've created a GitHub stars Livebook app that:
 * Processes time-series data
 * Creates interactive visualizations
 
-<!-- livebook:{"offset":9369,"stamp":{"token":"XCP.yTJgFfrV5YthqWfNRywS7gmebcwhGMxMQxq1BwUrlo2DIURIdwKhgh3JuoP0Ytf6HmQdjXbUruUqCMiR0BuwjQVrs6WxmM4bSzHBrwH01wHeZ_EA4uWlJ-RCkZc","token_signature":"dsA_LENgwn-IxSuVASr2cARw_1zOxiV6EIpmVm5L84xRH5eZstheL6wue24VHv31ThlsIMd675uffD7DgZhhvB_w32tP7K9XwE3iTrvpFPYmmOJhaNaWFc1BR-j-BJVbQwXh9Ih9UtjiNuTGxMNrZP6K0wdZrtfTJZQ4tUIw4wkDbMN7HSY3llZ_Sj39w4yWAG9u9KuYozNtCOmzD_raB1yocsCJEX4REspIFI0ylcEyB7P-E9xEP9fq75Ser5H2KYLF9SxkCpJf0vlOLThFKPERsGGnQ5aFuBKpAqeE1pdgoHIaM8ddgGuLf93aggFNmONMQxQMa1SAfe7C5H3uhg","version":1}} -->
+<!-- livebook:{"offset":9369,"stamp":{"token":"XCP.Pqde7fwuMYw1Pq2heNIYl7TBAzFCBIE_dtndkS1li9vdjTuwlXbijeaRq2WmHUX3q6f0EPKUWUzZKkSW8DxVFow1QPKCKTGglhqsB8hetEtQPK0qZ4FlXKey_ec","token_signature":"Aumv-h32N6BcYrM2H6KzJdRPp0re3lBKBZhHu9Tb5tcoWUs-LMVB3Yka6bcdN7XKb_jXrtaaIRmzPav9qspcIPbP2d2PWmBQ4V4eHJPYnnig19scqJFzBuKI3yR7QUcabYfXfFaaH2_iwQgWW1bFJXZxpMauYtliGylR-4JXRix83TI0v7T-d8JEVBDwNbbuWn-VZk_OjnT2g3kj63CvoypmmgcU7Q5S-ePTTQplRdQI-Vc8mvCiZeiQzr1u_IWR19JRJ26wH5Ns7v1nCll6IWXcDBqAwD1SUxtsD4UhjeUgJygD8Y4aDZFOYNSZDuirnV3ArdgNQB8KayQZ4pnLvQ","version":1}} -->
