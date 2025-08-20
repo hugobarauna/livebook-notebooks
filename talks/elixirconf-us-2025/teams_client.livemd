@@ -21,13 +21,17 @@ defmodule Teams.Connection do
   @loop_ping_delay 5_000
   @teams_ws_url "http://localhost:4701/user/websocket"
 
-  def start_link(listener, headers, url \\ @teams_ws_url) do
-    WebSockex.start_link(url, __MODULE__, %{listener: listener}, extra_headers: headers)
+  def start_link(connection_handler, headers, url \\ @teams_ws_url) do
+    WebSockex.start_link(url, __MODULE__, %{connection_handler: connection_handler},
+      extra_headers: headers
+    )
   end
 
   def handle_connect(_conn, state) do
-    send(state.listener, {:connection_state, :connected})
+    send(state.connection_handler, {:connection_state, :connected})
+
     Process.send_after(self(), :loop_ping, @loop_ping_delay)
+
     {:ok, state}
   end
 
@@ -38,7 +42,7 @@ defmodule Teams.Connection do
     Logger.debug("[CLIENT] Decoded WebSocket binary message: #{inspect(event)}")
 
     %{type: {type, message}} = event
-    send(state.listener, {:event, type, message})
+    send(state.connection_handler, {:event, type, message})
 
     {:ok, state}
   end

@@ -2,7 +2,6 @@
 
 ```elixir
 Mix.install([
-  {:mint_web_socket, "~> 1.0"},
   {:phoenix_playground, "~> 0.1.7"},
   {:kino, "~> 0.16.1"},
   {:protobuf, "~> 0.14.1"},
@@ -24,13 +23,17 @@ defmodule LivebookProto.Event do
     type: LivebookProto.ClientConnected,
     oneof: 0
 end
+```
 
+```elixir
 defmodule LivebookProto.ClientConnected do
   use Protobuf
 
-  field :env_vars, 1, repeated: true, type: LivebookProto.EnvironmentVariable
+  field(:env_vars, 1, repeated: true, type: LivebookProto.EnvironmentVariable)
 end
+```
 
+```elixir
 defmodule LivebookProto.EnvironmentVariable do
   use Protobuf
 
@@ -40,7 +43,7 @@ end
 ```
 
 ```elixir
-env_var = %LivebookProto.EnvironmentVariable{name: "foo", value: "some foo"}
+env_var = %LivebookProto.EnvironmentVariable{name: "SOME_API_TOKEN", value: "my api token value"}
 client_connected = %LivebookProto.ClientConnected{env_vars: [env_var]}
 event = %LivebookProto.Event{type: {:client_connected, client_connected}}
 
@@ -63,59 +66,6 @@ Kino.nothing()
 ## Server
 
 ```elixir
-defmodule Teams.ClientsTracker do
-  use Phoenix.Tracker
-
-  @default_options [
-    name: __MODULE__,
-    pubsub_server: PhoenixPlayground.PubSub
-  ]
-
-  @topic "teams-clients"
-
-  def start_link(opts \\ []) do
-    opts = Keyword.merge(@default_options, opts)
-    Phoenix.Tracker.start_link(__MODULE__, opts, opts)
-  end
-
-  def track(org_name) do
-    key = random_string()
-    Phoenix.Tracker.track(__MODULE__, self(), @topic, key, %{org_name: org_name})
-  end
-
-  def list do
-    Phoenix.Tracker.list(__MODULE__, @topic)
-  end
-
-  @impl true
-  def init(opts) do
-    server = Keyword.fetch!(opts, :pubsub_server)
-    {:ok, %{pubsub_server: server, node_name: Phoenix.PubSub.node_name(server)}}
-  end
-
-  @impl true
-  def handle_diff(diff, state) do
-    for {_topic, {joins, leaves}} <- diff do
-      for {key, meta} <- joins do
-        Logger.debug("[SERVER] presence join: key '#{key}' with meta #{inspect(meta)}")
-      end
-
-      for {key, meta} <- leaves do
-        Logger.debug("[SERVER] presence leave: key '#{key}' with meta #{inspect(meta)}")
-      end
-    end
-
-    {:ok, state}
-  end
-
-  defp random_string() do
-    :crypto.strong_rand_bytes(8)
-    |> Base.url_encode64(padding: false)
-  end
-end
-```
-
-```elixir
 defmodule UserSocket do
   @behaviour Phoenix.Socket.Transport
 
@@ -129,7 +79,6 @@ defmodule UserSocket do
   def connect(%{connect_info: %{x_headers: x_headers}}) do
     org_name = get_header(x_headers, "x-org-name")
     Logger.debug("[SERVER] Received WebSocket connection with org name: #{org_name}")
-    Teams.ClientsTracker.track(org_name)
 
     {:ok, %{org_name: org_name}}
   end
@@ -137,13 +86,14 @@ defmodule UserSocket do
   @impl true
   def init(state) do
     message = build_client_connected_message(state.org_name)
+
     send(self(), {:message, message})
 
     {:ok, state}
   end
 
   defp build_client_connected_message(_org_name) do
-    env_var = %LivebookProto.EnvironmentVariable{name: "foo", value: "some value"}
+    env_var = %LivebookProto.EnvironmentVariable{name: "API_TOKEN", value: "some api token"}
     client_connected = %LivebookProto.ClientConnected{env_vars: [env_var]}
     event = %LivebookProto.Event{type: {:client_connected, client_connected}}
 
@@ -153,6 +103,7 @@ defmodule UserSocket do
   @impl true
   def handle_info({:message, message}, state) do
     Logger.debug("[SERVER] Sending WebSocket message to client: #{inspect(message)}")
+
     {:push, {:binary, message}, state}
   end
 
@@ -183,8 +134,6 @@ end
 ```elixir
 {:ok, phx_playground_pid} =
   PhoenixPlayground.start(endpoint: Teams.Endpoint, port: 4600, open_browser: false)
-
-Kino.start_child!(Teams.ClientsTracker)
 ```
 
 ## Client
@@ -196,17 +145,23 @@ defmodule Teams.Connection do
   @loop_ping_delay 5_000
   @teams_ws_url "http://localhost:4600/user/websocket"
 
-  def start_link(listener, headers, url \\ @teams_ws_url) do
-    WebSockex.start_link(url, __MODULE__, %{listener: listener}, extra_headers: headers)
+  def start_link(connection_handler, headers, url \\ @teams_ws_url) do
+    WebSockex.start_link(url, __MODULE__, %{connection_handler: connection_handler},
+      extra_headers: headers
+    )
   end
 
+  @impl true
   def handle_connect(_conn, state) do
-    send(state.listener, {:connection_state, :connected})
+    send(state.connection_handler, {:connection_state, :connected})
+
     Process.send_after(self(), :loop_ping, @loop_ping_delay)
+
     {:ok, state}
   end
 
   # Received a binary message
+  @impl true
   def handle_frame({:binary, msg}, state) do
     Logger.debug("[CLIENT] Received WebSocket binary message: #{inspect(msg)}")
 
@@ -214,17 +169,19 @@ defmodule Teams.Connection do
     Logger.debug("[CLIENT] Decoded Protobuf from WebSocket message: #{inspect(event)}")
 
     %{type: {type, message}} = event
-    send(state.listener, {:event, type, message})
+    send(state.connection_handler, {:event, type, message})
 
     {:ok, state}
   end
 
   # Received a message
+  @impl true
   def handle_frame({type, msg}, state) do
     IO.puts("Received Message - Type: #{inspect(type)} -- Message: #{inspect(msg)}")
     {:ok, state}
   end
 
+  @impl true
   def handle_info(:loop_ping, state) do
     Process.send_after(self(), :loop_ping, @loop_ping_delay)
     {:reply, :ping, state}
@@ -250,7 +207,9 @@ defmodule Teams.Client do
   @impl true
   def init(org_name) do
     headers = [{"x-org-name", org_name}]
+    
     {:ok, connection_pid} = Teams.Connection.start_link(self(), headers)
+    
     {:ok, %__MODULE__{org_name: org_name, connection_pid: connection_pid}}
   end
 
@@ -280,16 +239,4 @@ Kino.nothing()
 
 ```elixir
 :sys.get_state(teams_client)
-```
-
-```elixir
-Teams.ClientsTracker.list()
-```
-
-```elixir
-Kino.terminate_child(teams_client)
-```
-
-```elixir
-Teams.ClientsTracker.list()
 ```

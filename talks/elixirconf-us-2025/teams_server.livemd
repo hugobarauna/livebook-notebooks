@@ -14,59 +14,6 @@ require Logger
 ## Server
 
 ```elixir
-defmodule Teams.ClientsTracker do
-  use Phoenix.Tracker
-
-  @default_options [
-    name: __MODULE__,
-    pubsub_server: PhoenixPlayground.PubSub
-  ]
-
-  @topic "teams-clients"
-
-  def start_link(opts \\ []) do
-    opts = Keyword.merge(@default_options, opts)
-    Phoenix.Tracker.start_link(__MODULE__, opts, opts)
-  end
-
-  def track(org_name) do
-    key = random_string()
-    Phoenix.Tracker.track(__MODULE__, self(), @topic, key, %{org_name: org_name})
-  end
-
-  def list do
-    Phoenix.Tracker.list(__MODULE__, @topic)
-  end
-
-  @impl true
-  def init(opts) do
-    server = Keyword.fetch!(opts, :pubsub_server)
-    {:ok, %{pubsub_server: server, node_name: Phoenix.PubSub.node_name(server)}}
-  end
-
-  @impl true
-  def handle_diff(diff, state) do
-    for {_topic, {joins, leaves}} <- diff do
-      for {key, meta} <- joins do
-        Logger.debug("[SERVER] presence join: key '#{key}' with meta #{inspect(meta)}")
-      end
-
-      for {key, meta} <- leaves do
-        Logger.debug("[SERVER] presence leave: key '#{key}' with meta #{inspect(meta)}")
-      end
-    end
-
-    {:ok, state}
-  end
-
-  defp random_string() do
-    :crypto.strong_rand_bytes(8)
-    |> Base.url_encode64(padding: false)
-  end
-end
-```
-
-```elixir
 defmodule UserSocket do
   @behaviour Phoenix.Socket.Transport
 
@@ -79,8 +26,8 @@ defmodule UserSocket do
   @impl true
   def connect(%{connect_info: %{x_headers: x_headers}}) do
     org_name = get_header(x_headers, "x-org-name")
+    
     Logger.debug("[SERVER] Received WebSocket connection with org name: #{org_name}")
-    Teams.ClientsTracker.track(org_name)
 
     {:ok, %{org_name: org_name}}
   end
@@ -96,7 +43,7 @@ defmodule UserSocket do
   end
 
   defp build_client_connected_message(_org_name) do
-    env_var = %LivebookProto.EnvironmentVariable{name: "foo", value: "some value"}
+    env_var = %LivebookProto.EnvironmentVariable{name: "API_TOKEN", value: "some api token"}
     client_connected = %LivebookProto.ClientConnected{env_vars: [env_var]}
     event = %LivebookProto.Event{type: {:client_connected, client_connected}}
 
@@ -106,6 +53,7 @@ defmodule UserSocket do
   @impl true
   def handle_info({:message, message}, state) do
     Logger.debug("[SERVER] Sending WebSocket message to client: #{inspect(message)}")
+
     {:push, {:binary, message}, state}
   end
 
@@ -136,8 +84,6 @@ end
 ```elixir
 {:ok, phx_playground_pid} =
   PhoenixPlayground.start(endpoint: Teams.Endpoint, port: 4701, open_browser: false)
-
-Kino.start_child!(Teams.ClientsTracker)
 ```
 
 ```elixir
