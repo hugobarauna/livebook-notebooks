@@ -87,7 +87,7 @@ defmodule GitHubApi.Paginator do
       Task.async_stream(
         next_page..last_page,
         fn page -> GitHubApi.request(pageless_endpoint <> "&page=#{page}") end,
-        max_concurrency: 30
+        max_concurrency: 5
       )
       |> Enum.flat_map(fn
         {:ok, {:ok, response}} -> [response]
@@ -233,7 +233,7 @@ Now we'll create the interactive form where users can enter a GitHub repository 
 form =
   Kino.Control.form(
     [
-      repo_name: Kino.Input.text("GitHub repo", default: "livebook-dev/kino")
+      repo_name: Kino.Input.text("GitHub repo", default: "tidewave-ai/tidewave_phoenix")
     ],
     submit: "Submit"
   )
@@ -306,4 +306,4 @@ In this tutorial, we've created a GitHub stars Livebook app that:
 * Processes time-series data
 * Creates interactive visualizations
 
-<!-- livebook:{"offset":9369,"stamp":{"token":"XCP.Pqde7fwuMYw1Pq2heNIYl7TBAzFCBIE_dtndkS1li9vdjTuwlXbijeaRq2WmHUX3q6f0EPKUWUzZKkSW8DxVFow1QPKCKTGglhqsB8hetEtQPK0qZ4FlXKey_ec","token_signature":"Aumv-h32N6BcYrM2H6KzJdRPp0re3lBKBZhHu9Tb5tcoWUs-LMVB3Yka6bcdN7XKb_jXrtaaIRmzPav9qspcIPbP2d2PWmBQ4V4eHJPYnnig19scqJFzBuKI3yR7QUcabYfXfFaaH2_iwQgWW1bFJXZxpMauYtliGylR-4JXRix83TI0v7T-d8JEVBDwNbbuWn-VZk_OjnT2g3kj63CvoypmmgcU7Q5S-ePTTQplRdQI-Vc8mvCiZeiQzr1u_IWR19JRJ26wH5Ns7v1nCll6IWXcDBqAwD1SUxtsD4UhjeUgJygD8Y4aDZFOYNSZDuirnV3ArdgNQB8KayQZ4pnLvQ","version":1}} -->
+<!-- livebook:{"offset":9379,"stamp":{"token":"XCP.mNAI_X9fcwLKwD1_gxb2k_3Qo_KLewWdeknediSE4uP9Ur80PTHFOXeV5XOdDOaGx1P4e33MNJO-LmS-Z-PVHZsfS8hP_IawfQTdkjeabhLISJeDrbjVXfEMesY","token_signature":"T7gj2ZEbVbhtUDLm3zdbMMjMGJibYjXP25Dvh4caE0USPURPKN2RRb9EYwmStuPSXrL5KBNx1zc2OSYBySg_QWTGYkP2x4JQAztUQukyml6crRV9CuUOdYbyMZt6yUT8kUiWm5OMLBjY32dG3xpUwZ1yrauvYEkUX74edqGDaN3lYiCn_lo7ubNlqsVqqCYnuaea2JZ6_zp4_dtvM4idzvX2EwtkjwK1HZVZPn8em-QMuLpcGCIktfLaB2q1JQu2Wo5EOdjpR6MzFLJ89nKjcXn18mqus_PZbYz838jwU1c2P21zHwk1Tf4UXXR0Ggtgu20UqkbDhioxpIyDxHGzgw","version":1}} -->
