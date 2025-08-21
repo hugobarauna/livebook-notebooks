@@ -43,8 +43,13 @@ end
 ```
 
 ```elixir
-env_var = %LivebookProto.EnvironmentVariable{name: "SOME_API_TOKEN", value: "my api token value"}
+env_var = %LivebookProto.EnvironmentVariable{
+  name: "SOME_API_TOKEN",
+  value: "my api token value"
+}
+
 client_connected = %LivebookProto.ClientConnected{env_vars: [env_var]}
+
 event = %LivebookProto.Event{type: {:client_connected, client_connected}}
 
 binary =
