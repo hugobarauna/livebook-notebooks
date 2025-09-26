@@ -1,0 +1,186 @@
+# Teams Client
+
+```elixir
+Mix.install([
+  {:phoenix_playground, "~> 0.1.7"},
+  {:livebook_proto,
+   github: "hugobarauna/livebook-notebooks", sparse: "talks/alchemyconf/livebook_proto"},
+  {:websockex, "~> 0.5.0", hex: :websockex_wt},
+  {:kino, "~> 0.15.3"}
+])
+
+require Logger
+```
+
+## Client
+
+```elixir
+defmodule Teams.Connection do
+  use WebSockex
+
+  @loop_ping_delay 5_000
+  @teams_ws_url "http://localhost:4701/user/websocket"
+
+  def start_link(connection_handler, headers, url \\ @teams_ws_url) do
+    WebSockex.start_link(url, __MODULE__, %{connection_handler: connection_handler},
+      extra_headers: headers
+    )
+  end
+
+  def handle_connect(_conn, state) do
+    send(state.connection_handler, {:connection_state, :connected})
+
+    Process.send_after(self(), :loop_ping, @loop_ping_delay)
+
+    {:ok, state}
+  end
+
+  def handle_frame({:binary, msg}, state) do
+    Logger.debug("[CLIENT] Received WebSocket binary message: #{inspect(msg)}")
+
+    event = LivebookProto.Event.decode(msg)
+    Logger.debug("[CLIENT] Decoded WebSocket binary message: #{inspect(event)}")
+
+    %{type: {type, message}} = event
+    send(state.connection_handler, {:event, type, message})
+
+    {:ok, state}
+  end
+
+  def handle_frame({type, msg}, state) do
+    IO.puts("Received Message - Type: #{inspect(type)} -- Message: #{inspect(msg)}")
+    {:ok, state}
+  end
+
+  def handle_info(:loop_ping, state) do
+    Process.send_after(self(), :loop_ping, @loop_ping_delay)
+    {:reply, :ping, state}
+  end
+end
+```
+
+```elixir
+defmodule Teams.Client do
+  use GenServer
+
+  defstruct [
+    :org_name,
+    :env_vars,
+    :connection_pid,
+    connection_state: :disconnected
+  ]
+
+  def start_link(org_name) do
+    GenServer.start_link(__MODULE__, org_name, name: __MODULE__)
+  end
+
+  def get_environment_variables() do
+    GenServer.call(__MODULE__, :get_environment_variables)
+  end
+
+  @impl true
+  def init(org_name) do
+    headers = [{"x-org-name", org_name}]
+    {:ok, connection_pid} = Teams.Connection.start_link(self(), headers)
+    {:ok, %__MODULE__{org_name: org_name, connection_pid: connection_pid}}
+  end
+
+  @impl true
+  def handle_info({:connection_state, :connected}, state) do
+    {:noreply, %{state | connection_state: :connected}}
+  end
+
+  @impl true
+  def handle_info({:event, :client_connected, %LivebookProto.ClientConnected{} = message}, state) do
+    %LivebookProto.ClientConnected{env_vars: env_vars} = message
+
+    env_vars =
+      for env_var <- env_vars do
+        %{name: env_var.name, value: env_var.value}
+      end
+
+    {:noreply, %{state | env_vars: env_vars}}
+  end
+
+  @impl true
+  def handle_info(
+        {:event, :env_var_created, %LivebookProto.EnvironmentVariableCreated{} = message},
+        state
+      ) do
+    %LivebookProto.EnvironmentVariableCreated{env_var: env_var} = message
+
+    env_var = %{name: env_var.name, value: env_var.value}
+
+    Phoenix.PubSub.broadcast!(
+      PhoenixPlayground.PubSub,
+      "org_events:#{state.org_name}",
+      {:env_var_created, env_var}
+    )
+
+    env_vars = [env_var | state.env_vars]
+    {:noreply, %{state | env_vars: env_vars}}
+  end
+
+  @impl true
+  def handle_call(:get_environment_variables, _from, state) do
+    {:reply, state.env_vars, state}
+  end
+end
+```
+
+```elixir
+teams_client = Kino.start_child!({Teams.Client, "dashbit"})
+Kino.nothing()
+```
+
+```elixir
+defmodule Teams.OrgLive do
+  use Phoenix.LiveView
+
+  def mount(_params, _session, socket) do
+    org_name = "dashbit"
+    Phoenix.PubSub.subscribe(PhoenixPlayground.PubSub, "org_events:#{org_name}")
+
+    socket =
+      assign(socket, org_name: org_name, env_vars: Teams.Client.get_environment_variables())
+
+    {:ok, socket}
+  end
+
+  def render(assigns) do
+    ~H"""
+    <h1 class="text-2xl font-bold mb-4">Org: <%= @org_name %></h1>
+
+    <div class="container mx-auto p-4">
+      <h2 class="text-xl font-bold mb-4">Environment Variables</h2>
+
+      <table class="w-full border-collapse">
+        <thead>
+          <tr>
+            <th class="border p-2 text-left">Name</th>
+            <th class="border p-2 text-left">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for env_var <- @env_vars do %>
+            <tr>
+              <td class="border p-2"><%= env_var.name %></td>
+              <td class="border p-2"><%= env_var.value %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  def handle_info({:env_var_created, env_var}, socket) do
+    {:noreply, update(socket, :env_vars, fn env_vars -> [env_var | env_vars] end)}
+  end
+end
+```
+
+```elixir
+{:ok, phx_playground_pid} =
+  PhoenixPlayground.start(live: Teams.OrgLive, port: 4700)
+```
