@@ -1,0 +1,296 @@
+# Options to build your own UI component
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.13.2"},
+  {:jason, "~> 1.4"}
+])
+```
+
+## The Kino.HTML built-in module
+
+```elixir
+Kino.HTML.new("""
+<h3>Look!</h3>
+
+<p>I wrote this HTML from <strong>Kino</strong>!</p>
+""")
+```
+
+```elixir
+Kino.HTML.new("""
+<style>
+  #button {
+    width: 5em;
+    transition: width 0.5s ease;
+    font-size: 1em;
+  }
+</style>
+
+<button id="button">Click</button>
+
+<script>
+  const button = document.querySelector("#button");
+
+  button.addEventListener("click", (event) => {
+    button.textContent = "Clicked!";
+    button.style.width = "18em";
+  });
+</script>
+""")
+```
+
+## Kino.HTML + CSS
+
+```elixir
+defmodule KinoSpinner do
+  def new(dimensions \\ "30px") do
+    Kino.HTML.new("""
+    <div class="loader"></div>
+
+    <style>
+      .loader {
+        border: 16px solid #f3f3f3; /* Light grey */
+        border-top: 16px solid #3498db; /* Blue */
+        border-radius: 50%;
+        width: #{dimensions};
+        height: #{dimensions};
+        animation: spin 2s linear infinite;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+    """)
+  end
+end
+```
+
+```elixir
+KinoSpinner.new()
+```
+
+```elixir
+import Kino.Shorts
+```
+
+How we can use that `KinoSpinner` with a form:
+
+```elixir
+form =
+  Kino.Control.form(
+    [
+      name: Kino.Input.text("Data", default: "some data to process")
+    ],
+    submit: "Submit"
+  )
+
+output_frame = frame()
+
+Kino.listen(form, fn _event ->
+  Kino.Frame.render(output_frame, grid([text("Processing..."), KinoSpinner.new()]))
+  Process.sleep(2_000)
+  Kino.Frame.render(output_frame, "Processing is done. ✅")
+end)
+
+grid([form, output_frame])
+```
+
+## Kino.HTML + CSS + Javascript
+
+```elixir
+defmodule KinoTextWithClipboard do
+  def new(text) do
+    Kino.HTML.new("""
+      <style>
+        .container {
+            box-sizing: border-box;
+            position: relative;
+            width: 100%;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .text-content {
+            width: 100%;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+        .clipboard-icon {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            cursor: pointer;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        .clipboard-icon:hover {
+            background-color: #f0f0f0;
+        }
+        .copy-feedback {
+            position: absolute;
+            right: 40px;
+            top: 13px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+      </style>
+
+      <div class="container">
+        <div id="textContent" class="text-content">
+            #{text}
+        </div>
+        <div class="clipboard-icon" onclick="copyToClipboard()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            </svg>
+        </div>
+        <div class="copy-feedback" id="copyFeedback">Copied</div>
+      </div>
+
+      <script>
+        function copyToClipboard() {
+            const textContent = document.getElementById('textContent');
+            const textToCopy = textContent.innerText;
+
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = textToCopy;
+            document.body.appendChild(tempTextArea);
+
+            tempTextArea.select();
+            document.execCommand('copy');
+
+            document.body.removeChild(tempTextArea);
+
+            const icon = document.querySelector('.clipboard-icon');
+            const feedback = document.getElementById('copyFeedback');
+
+            icon.style.backgroundColor = '#4CAF50';
+            feedback.style.opacity = '1';
+
+            setTimeout(() => {
+                icon.style.backgroundColor = '';
+                feedback.style.opacity = '0';
+            }, 2000);
+        }
+    </script>
+    """)
+  end
+end
+```
+
+```elixir
+Kino.Text.new("some text")
+```
+
+```elixir
+KinoTextWithClipboard.new("some text")
+```
+
+## Custom Kino
+
+```elixir
+defmodule KinoJsonInput do
+  use Kino.JS
+  use Kino.JS.Live
+
+  def new(json) do
+    Kino.JS.Live.new(__MODULE__, json)
+  end
+
+  def read(kino) do
+    Kino.JS.Live.call(kino, :read)
+  end
+
+  @impl true
+  def init(json, ctx) do
+    {:ok, assign(ctx, json: json)}
+  end
+
+  @impl true
+  def handle_connect(ctx) do
+    {:ok, ctx.assigns.json, ctx}
+  end
+
+  @impl true
+  def handle_event("update_json", json, ctx) do
+    {:noreply, assign(ctx, json: json)}
+  end
+
+  @impl true
+  def handle_call(:read, _from, ctx) do
+    {:reply, ctx.assigns.json, ctx}
+  end
+
+  asset "main.js" do
+    """
+    export async function init(ctx, json) {
+      await ctx.importCSS("https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css");
+      await ctx.importJS("https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js");
+      await ctx.importJS("https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js");
+
+      await ctx.importCSS("https://cdn.jsdelivr.net/gh/WebCoder49/code-input@2.2/code-input.min.css");
+      await ctx.importJS("https://cdn.jsdelivr.net/gh/WebCoder49/code-input@2.2/code-input.min.js");
+      await ctx.importJS("https://cdn.jsdelivr.net/gh/WebCoder49/code-input@2.2.1/plugins/indent.min.js");
+
+
+      // This is needed because the CodeInput lib is activated
+      // on window.load (https://github.com/WebCoder49/code-input/blob/v2.2.1/code-input.js#L983-L985)
+      // but by the time this JS code is executed, the original load event has already been fired.
+      window.dispatchEvent(new Event("load"));
+
+
+      codeInput.registerTemplate("syntax-highlighted", codeInput.templates.prism(Prism, [new codeInput.plugins.Indent()]));
+
+      ctx.root.innerHTML = `
+        <code-input id="input-json" language="json" template="syntax-highlighted" placeholder="JSON">${json}</code-input>
+      `;
+
+      const codeInputEl = document.getElementById("input-json");
+
+      codeInputEl.addEventListener("change", (event) => {
+        ctx.pushEvent("update_json", event.target.value);
+      });
+    }
+    """
+  end
+end
+```
+
+```elixir
+Kino.Input.textarea("Json", default: """
+{
+  "name": "Hugo Baraúna",
+  "age": 18,
+  "company": "Dashbit / Livebook"
+}
+""")
+```
+
+```elixir
+kino_json_input =
+  KinoJsonInput.new("""
+  {
+    "name": "Hugo Baraúna",
+    "age": 18,
+    "company": "Dashbit / Livebook"
+  }
+  """)
+```
+
+```elixir
+kino_json_input
+|> KinoJsonInput.read()
+|> Jason.decode!()
+```

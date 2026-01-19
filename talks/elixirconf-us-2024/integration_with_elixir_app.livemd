@@ -1,0 +1,162 @@
+<!-- livebook:{"app_settings":{"access_type":"public","auto_shutdown_ms":5000,"multi_session":true,"output_type":"rich","slug":"integration-with-phoenix-app"}} -->
+
+# Integration with your Elixir/Phoenix app - demo
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.13.0"}
+])
+```
+
+## Section
+
+```elixir
+livebook_app_node = node()
+```
+
+<!-- livebook:{"attrs":"eyJhc3NpZ25fdG8iOiJwaG9lbml4X2FwcF9ub2RlIiwiY29kZSI6Im5vZGUoKSIsImNvb2tpZSI6InNlY3JldCIsImNvb2tpZV9zZWNyZXQiOiIiLCJub2RlIjoicGhvZW5peF9hcHBAMTI3LjAuMC4xIiwibm9kZV9zZWNyZXQiOiIiLCJ1c2VfY29va2llX3NlY3JldCI6ZmFsc2UsInVzZV9ub2RlX3NlY3JldCI6ZmFsc2V9","chunks":null,"kind":"Elixir.Kino.RemoteExecutionCell","livebook_object":"smart_cell"} -->
+
+```elixir
+require Kino.RPC
+node = :"phoenix_app@127.0.0.1"
+Node.set_cookie(node, :secret)
+phoenix_app_node = Kino.RPC.eval_string(node, ~S"node()", file: __ENV__.file)
+```
+
+````elixir
+Kino.Markdown.new("""
+```mermaid
+flowchart LR
+
+    subgraph "&nbsp&nbsp node: #{livebook_app_node} &nbsp&nbsp"
+    lbapp[Livebook app]
+    end
+
+    subgraph "&nbsp&nbsp node: #{phoenix_app_node} &nbsp&nbsp"
+    phxapp[Phoenix app]
+    end
+
+    lbapp-.Erlang distributed.-phxapp
+```
+""")
+````
+
+```elixir
+import Kino.Shorts
+cache_name = :my_cache
+```
+
+```elixir
+cache_key = read_text("Cache key")
+
+if cache_key == "" do
+  Kino.interrupt!(:normal, "👆 Fill in the inputs")
+end
+```
+
+<!-- livebook:{"attrs":"eyJhc3NpZ25fdG8iOiJ0dGwiLCJjb2RlIjoiQ2FjaGV4LnR0bCEoY2FjaGVfbmFtZSwgY2FjaGVfa2V5KSIsImNvb2tpZSI6InNlY3JldCIsImNvb2tpZV9zZWNyZXQiOiIiLCJub2RlIjoicGhvZW5peF9hcHBAMTI3LjAuMC4xIiwibm9kZV9zZWNyZXQiOiIiLCJ1c2VfY29va2llX3NlY3JldCI6ZmFsc2UsInVzZV9ub2RlX3NlY3JldCI6ZmFsc2V9","chunks":null,"kind":"Elixir.Kino.RemoteExecutionCell","livebook_object":"smart_cell"} -->
+
+```elixir
+require Kino.RPC
+node = :"phoenix_app@127.0.0.1"
+Node.set_cookie(node, :secret)
+
+ttl =
+  Kino.RPC.eval_string(node, ~S"Cachex.ttl!(cache_name, cache_key)", file: __ENV__.file)
+```
+
+```elixir
+defmodule KinoCachex.TTL do
+  def new(key, ttl) do
+    Kino.HTML.new("""
+    <p>
+    The cache entry with key "#{key}" will expire in:
+    <span id="ttl" data-ttl-at="#{ttl_at(ttl)}"></span>
+    </p>
+
+    <script>
+      function formatDuration(seconds) {
+        const days = Math.floor(seconds / (24 * 60 * 60));
+        seconds %= 24 * 60 * 60;
+        const hours = Math.floor(seconds / (60 * 60));
+        seconds %= 60 * 60;
+        const minutes = Math.floor(seconds / 60);
+        seconds %= 60;
+
+        const parts = [];
+        if (days > 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+        if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+        if (minutes > 0) parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
+        if (seconds > 0 || parts.length === 0) parts.push(`${seconds} second${seconds !== 1 ? 's' : ''}`);
+
+        if (parts.length > 1) {
+          const lastPart = parts.pop();
+          return parts.join(', ') + ', and ' + lastPart;
+        } else {
+          return parts[0];
+        }
+      }
+
+      function updateDuration() {
+        const spanElement = document.getElementById('ttl');
+        const ttlAt = spanElement.getAttribute('data-ttl-at');
+        const now = Math.floor(Date.now() / 1000);
+        console.log(now);
+
+        const timeUntilTtl = ttlAt - now;
+        const formattedDuration = formatDuration(timeUntilTtl);
+        spanElement.textContent = formattedDuration;
+      }
+
+      updateDuration();
+      setInterval(updateDuration, 1000);
+    </script>
+    """)
+  end
+
+  defp ttl_at(ttl) do
+    DateTime.utc_now()
+    |> DateTime.add(ttl, :millisecond)
+    |> DateTime.to_unix()
+  end
+end
+```
+
+```elixir
+ttl_frame = frame(placeholder: false)
+Kino.Frame.render(ttl_frame, KinoCachex.TTL.new(cache_key, ttl))
+ttl_frame
+```
+
+```elixir
+text("Do you want to delete that cache entry now?") |> Kino.render()
+
+clear_cache = read_select("", [{"", ""}, {true, "yes"}, {false, "no"}])
+
+if clear_cache == "" do
+  Kino.interrupt!(:normal, "👆 Fill in the inputs")
+end
+```
+
+<!-- livebook:{"attrs":"eyJhc3NpZ25fdG8iOiIiLCJjb2RlIjoiaWYgY2xlYXJfY2FjaGUgPT0gdHJ1ZSBkb1xuICBDYWNoZXguZGVsIShjYWNoZV9uYW1lLCBjYWNoZV9rZXkpXG5lbmQiLCJjb29raWUiOiJzZWNyZXQiLCJjb29raWVfc2VjcmV0IjoiIiwibm9kZSI6InBob2VuaXhfYXBwQDEyNy4wLjAuMSIsIm5vZGVfc2VjcmV0IjoiIiwidXNlX2Nvb2tpZV9zZWNyZXQiOmZhbHNlLCJ1c2Vfbm9kZV9zZWNyZXQiOmZhbHNlfQ","chunks":null,"kind":"Elixir.Kino.RemoteExecutionCell","livebook_object":"smart_cell"} -->
+
+```elixir
+require Kino.RPC
+node = :"phoenix_app@127.0.0.1"
+Node.set_cookie(node, :secret)
+
+Kino.RPC.eval_string(
+  node,
+  ~S"""
+  if clear_cache == true do
+    Cachex.del!(cache_name, cache_key)
+  end
+  """,
+  file: __ENV__.file
+)
+```
+
+```elixir
+Kino.Frame.clear(ttl_frame)
+text("Finished ✅")
+```
