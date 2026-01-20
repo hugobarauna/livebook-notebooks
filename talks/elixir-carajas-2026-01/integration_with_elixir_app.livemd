@@ -4,7 +4,7 @@
 
 ```elixir
 Mix.install([
-  {:kino, "~> 0.13.0"}
+  {:kino, "~> 0.18.0"}
 ])
 ```
 
@@ -28,11 +28,11 @@ Kino.Markdown.new("""
 ```mermaid
 flowchart LR
 
-    subgraph "&nbsp&nbsp node: #{livebook_app_node} &nbsp&nbsp"
+    subgraph "Erlang VM node A"
     lbapp[Livebook app]
     end
 
-    subgraph "&nbsp&nbsp node: #{phoenix_app_node} &nbsp&nbsp"
+    subgraph Erlang VM node B
     phxapp[Phoenix app]
     end
 
@@ -151,9 +151,7 @@ Kino.RPC.eval_string(
   if clear_cache == true do
     Cachex.del!(cache_name, cache_key)
   end
-  """,
-  file: __ENV__.file
-)
+  """, file: __ENV__.file)
 ```
 
 ```elixir
