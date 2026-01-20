@@ -1,13 +1,13 @@
-# Options to build your own UI component
+# Opções para contruir seu próprio componente de UI
 
 ```elixir
 Mix.install([
-  {:kino, "~> 0.13.2"},
-  {:jason, "~> 1.4"}
+  {:kino, "~> 0.18.0"},
+  {:jason, "~> 1.4.0"}
 ])
 ```
 
-## The Kino.HTML built-in module
+## O módulo Kino.HTML
 
 ```elixir
 Kino.HTML.new("""
@@ -76,7 +76,7 @@ KinoSpinner.new()
 import Kino.Shorts
 ```
 
-How we can use that `KinoSpinner` with a form:
+Podemos usar esse `KinoSpinner` com um formulário:
 
 ```elixir
 form =
@@ -113,21 +113,21 @@ defmodule KinoTextWithClipboard do
             border: 1px solid #ccc;
             border-radius: 4px;
             padding: 10px;
-        }
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }
         .text-content {
-            width: 100%;
-            margin-bottom: 10px;
+            flex: 1;
             word-wrap: break-word;
         }
         .clipboard-icon {
-            position: absolute;
-            right: 10px;
-            top: 10px;
             cursor: pointer;
             background-color: #fff;
             border: 1px solid #ccc;
             border-radius: 4px;
             padding: 5px;
+            flex-shrink: 0;
         }
         .clipboard-icon:hover {
             background-color: #f0f0f0;
