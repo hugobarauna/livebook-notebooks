@@ -4,96 +4,73 @@
 
 ```elixir
 Mix.install([
-  {:kino, "~> 0.14.0"},
-  {:req, "~> 0.5.6"},
+  {:kino, "~> 0.18.0"},
+  {:req, "~> 0.5.17"},
   {:kino_vega_lite, "~> 0.1.13"}
 ])
 ```
 
-## Github data
+## Pegando dados da API GitHub
+
+Primeiro, vamos criar um cliente simples da API do GitHub. Ele será usado para buscar a lista de pessoas que deram estrela em um repositório.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Vamos dividir esse cliente de API em dois módulos.
+
+O primeiro ficará responsável por buscar a lista de stargazers de um repositório específico.
 
 ```elixir
-defmodule GithubApi do
+defmodule GitHubApi do
   def stargazers(repo_name) do
-    case Req.get!(base_req(), url: "/repos/#{repo_name}/stargazers?per_page=100") do
-      %Req.Response{status: 200, headers: headers} ->
-        last_page = get_last_page_number(headers)
-        star_dates = concurret_paginate(repo_name, last_page)
-        {:ok, star_dates}
+    stargazers_path = "/repos/#{repo_name}/stargazers?per_page=100"
 
-      %Req.Response{status: 404, body: body} ->
-        {:error, body["message"]}
+    with {:ok, response} <- request(stargazers_path),
+         {:ok, responses} <- GitHubApi.Paginator.maybe_paginate(response) do
+      responses
+      |> Enum.flat_map(fn response -> parse_stargazers(response.body) end)
+      |> then(fn stargazers -> {:ok, stargazers} end)
     end
   end
 
-  defp base_req() do
-    Req.new(
-      base_url: "https://api.github.com",
-      auth: {:bearer, github_token()},
-      headers: [
-        accept: "application/vnd.github.star+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      ]
-    )
+  def stargazers!(repo_name) do
+    {:ok, stargazers} = stargazers(repo_name)
+    stargazers
   end
 
-  defp github_token do
-    System.fetch_env!("LB_GITHUB_TOKEN_DEMO")
-  end
-
-  defp get_last_page_number(headers) do
-    link_header =
-      headers
-      |> Enum.find(fn {key, _value} -> key == "link" end)
-      |> elem(1)
-      |> List.first()
-
-    last_link =
-      link_header
-      |> String.split(",")
-      |> Enum.map(fn link ->
-        [url, rel] = String.split(link, ";")
-        [url] = Regex.run(~r/<(.*)>/, url, capture: :all_but_first)
-        [_, rel] = String.split(rel, "=")
-        rel = String.trim(rel)
-        [url, rel]
-      end)
-      |> Enum.find(fn [_url, rel] -> rel == "\"last\"" end)
-
-    if last_link == nil do
-      ""
-    else
-      [page, _] = last_link
-
-      %{"page_number" => page_number} =
-        Regex.named_captures(~r/.*&page=(?<page_number>\d+)/, page)
-
-      String.to_integer(page_number)
+  def request(path) do
+    case Req.get(new(), url: path) do
+      {:ok, %Req.Response{status: 200} = response} -> {:ok, response}
+      {:ok, %Req.Response{status: 403}} -> {:error, "GitHub API rate limit reached"}
+      {:ok, response} -> {:error, response.body["message"]}
+      {:error, exception} -> {:error, "Exception calling GitHub API: #{inspect(exception)}"}
     end
   end
 
-  defp concurret_paginate(repo_name, last_page) do
-    1..last_page
-    |> Task.async_stream(
-      fn page ->
-        response =
-          Req.get!(base_req(), url: "/repos/#{repo_name}/stargazers?per_page=100&page=#{page}")
+  def new do
+    req =
+      Req.new(
+        base_url: "https://api.github.com",
+        headers: [
+          accept: "application/vnd.github.star+json",
+          "X-GitHub-Api-Version": "2022-11-28"
+        ]
+      )
 
-        if response.status != 200, do: IO.inspect("BAM!")
-        parse(response.body)
-      end,
-      max_concurrency: 60
-    )
-    |> Enum.reduce([], fn {:ok, stargazers}, stargazers_acc ->
-      [stargazers | stargazers_acc]
-    end)
-    |> List.flatten()
+    req =
+      case System.fetch_env("LB_GITHUB_TOKEN") do
+        {:ok, token} -> Req.merge(req, auth: {:bearer, token})
+        _ -> req
+      end
+
+    req
   end
 
-  defp parse(body) do
-    body
-    |> Enum.map(fn %{"starred_at" => starred_at, "user" => %{"login" => user_login}} ->
+  defp parse_stargazers(stargazers) do
+    Enum.map(stargazers, fn stargazer ->
+      %{"starred_at" => starred_at, "user" => %{"login" => user_login}} = stargazer
       {:ok, starred_at, _} = DateTime.from_iso8601(starred_at)
+
       %{
         starred_at: starred_at,
         user_login: user_login
@@ -104,21 +81,104 @@ end
 ```
 
 ```elixir
+defmodule GitHubApi.Paginator do
+  def maybe_paginate(response) do
+    responses =
+      if "link" in Map.keys(response.headers) do
+        paginate(response)
+      else
+        [response]
+      end
+
+    {:ok, responses}
+  end
+
+  def paginate(response) do
+    pageless_endpoint = pageless_endpoint(response.headers["link"])
+    next_page = page_number(response.headers["link"], "next")
+    last_page = page_number(response.headers["link"], "last")
+
+    additional_responses =
+      Task.async_stream(
+        next_page..last_page,
+        fn page -> GitHubApi.request(pageless_endpoint <> "&page=#{page}") end,
+        max_concurrency: 30
+      )
+      |> Enum.flat_map(fn
+        {:ok, {:ok, response}} -> [response]
+        _ -> []
+      end)
+
+    [response] ++ additional_responses
+  end
+
+  defp pageless_endpoint(link_header) do
+    links = hd(link_header)
+
+    %{"endpoint" => endpoint} = Regex.named_captures(~r/<(?<endpoint>.*?)>;\s/, links)
+    uri = URI.parse(endpoint)
+
+    %{path: path} = Map.take(uri, [:path])
+
+    pageless_query =
+      URI.decode_query(uri.query)
+      |> Map.drop(["page"])
+      |> URI.encode_query()
+
+    "#{path}?#{pageless_query}"
+  end
+
+  defp page_number(link_header, rel) do
+    links = hd(link_header)
+
+    %{"page_number" => page_number} =
+      Regex.named_captures(~r/<.*page=(?<page_number>\d+)>; rel="#{rel}"/, links)
+
+    String.to_integer(page_number)
+  end
+end
+```
+
+```elixir
+repo_name = "livebook-dev/vega_lite"
+
+stargazers =
+  case GitHubApi.stargazers(repo_name) do
+    {:ok, stargazers} ->
+      stargazers
+
+    {:error, error_message} ->
+      IO.puts(error_message)
+      []
+  end
+```
+
+## Processando os dados do GitHub
+
+Agora precisamos transformar os dados de stargazers para um formato que funcione para visualização. Vamos organizá-los para mostrar o total acumulado de estrelas por data, assim:
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+%{
+  date: [~D[2025-04-25], ~D[2025-04-24], ~D[2025-04-23]],
+  stars: [528, 510, 490]
+}
+```
+
+O módulo abaixo vai transformar os dados do jeito que a gente precisa.
+
+```elixir
 defmodule GithubDataProcessor do
   def cumulative_star_dates(stargazers) do
     stargazers
     |> Enum.group_by(&DateTime.to_date(&1.starred_at))
     |> Enum.map(fn {date, stargazers} -> {date, Enum.count(stargazers)} end)
     |> List.keysort(0, {:asc, Date})
-    |> Enum.reduce(%{date: [], stars: []}, fn {date, stars}, data ->
-      %{date: dates_acc, stars: stars_acc} = data
+    |> Enum.reduce(%{date: [], stars: [0]}, fn {date, stars}, acc ->
+      %{date: dates_acc, stars: stars_acc} = acc
 
-      cumulative_stars =
-        if List.first(stars_acc) == nil do
-          0 + stars
-        else
-          List.first(stars_acc) + stars
-        end
+      cumulative_stars = List.first(stars_acc) + stars
 
       %{date: [date | dates_acc], stars: [cumulative_stars | stars_acc]}
     end)
@@ -126,25 +186,32 @@ defmodule GithubDataProcessor do
 end
 ```
 
-## UI
+```elixir
+data = GithubDataProcessor.cumulative_star_dates(stargazers)
+# |> Kino.Tree.new
+```
+
+## Componentes da UI (interface com o usuário)
 
 ```elixir
 defmodule StarsChart do
   def new(data) do
-    VegaLite.new(width: 851, height: 549, title: "Github Stars history")
+    VegaLite.new(width: 700, height: 450, title: "GitHub Stars history")
     |> VegaLite.data_from_values(data, only: ["date", "stars"])
-    |> VegaLite.mark(:line)
+    |> VegaLite.mark(:line, tooltip: true)
     |> VegaLite.encode_field(:x, "date", type: :temporal)
     |> VegaLite.encode_field(:y, "stars", type: :quantitative)
   end
 end
 ```
 
+## UI (interface com o usuário)
+
 ```elixir
 form =
   Kino.Control.form(
     [
-      name: Kino.Input.text("Github full repo name", default: "livebook-dev/livebook")
+      name: Kino.Input.text("Github full repo name", default: "livebook-dev/kino")
     ],
     submit: "Submit"
   )
@@ -158,15 +225,16 @@ Kino.listen(form, fn event ->
 
   data =
     repo_name
-    |> GithubApi.stargazers()
-    |> then(fn {:ok, star_dates} -> GithubDataProcessor.cumulative_star_dates(star_dates) end)
+    |> GitHubApi.stargazers!()
+    |> GithubDataProcessor.cumulative_star_dates()
 
   table = Kino.DataTable.new(data)
   chart = StarsChart.new(data)
-  tabs = Kino.Layout.tabs([Chart: chart, Table: table])
+  tabs = Kino.Layout.tabs(Chart: chart, Table: table)
   Kino.Frame.render(output_frame, tabs)
 end)
 
 layout_frame
-
 ```
+
+<!-- livebook:{"offset":6077,"stamp":{"token":"XCP.VCyDpHv6G7fV00O-2ju2rSqu0qzwUvis5Fgs_rXvOd8tSaQFwlA2-DELmzyviDqLJlGd7bb8WelZJYI6qJyFXOVwfElasSxqeifdSw9zXMeEm5kDjgjy","version":2}} -->
