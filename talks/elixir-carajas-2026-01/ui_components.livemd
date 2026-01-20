@@ -101,6 +101,10 @@ grid([form, output_frame])
 ## Kino.HTML + CSS + Javascript
 
 ```elixir
+Kino.Text.new("Algum texto")
+```
+
+```elixir
 defmodule KinoTextWithClipboard do
   def new(text) do
     Kino.HTML.new("""
@@ -189,10 +193,6 @@ defmodule KinoTextWithClipboard do
     """)
   end
 end
-```
-
-```elixir
-Kino.Text.new("Algum texto")
 ```
 
 ```elixir
