@@ -1,0 +1,169 @@
+# Custom EPMD module
+
+```elixir
+# --- Helpers (not part of the technique) ---
+
+random_id = fn -> :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower) end
+
+wait_until = fn check ->
+  Stream.repeatedly(fn ->
+    Process.sleep(100)
+    check.()
+  end)
+  |> Stream.take(30)
+  |> Enum.find(& &1)
+end
+```
+
+## The idea
+
+The BEAM calls an EPMD module for node registration and discovery. By default it's `:erl_epmd`, which talks to the EPMD daemon on default port 4369.
+
+But you can swap it with `-epmd_module YourModule` or via `:kernel` config. Your module just needs to implement a few functions. Let's build one.
+
+## See what functions are fired from EPMD module during clustering
+
+We'll build a simple custom EPMD module, a logging EPMD module. It delegates everything to `:erl_epmd` but logs every call.
+
+We compile it, write it to disk, then start two nodes:
+
+* **Node A**: regular EPMD (a normal Elixir app)
+* **Node B**: uses our `LoggingEPMD` and connects to Node A
+
+```elixir
+dir = Path.join(System.tmp_dir!(), "custom_epmd_demo")
+log_file = Path.join(System.tmp_dir!(), "epmd_log.txt")
+File.mkdir_p!(dir)
+
+{:module, _, binary, _} =
+  defmodule LoggingEPMD do
+    @log_file Path.join(System.tmp_dir!(), "epmd_log.txt")
+
+    defp log(msg) do
+      File.write!(@log_file, msg <> "\n", [:append])
+    end
+
+    def start_link() do
+      log("start_link() called")
+      :erl_epmd.start_link()
+    end
+
+
+    def register_node(name, port, family) do
+      log(
+        "register_node/3 called with name=#{inspect(name)}, port=#{inspect(port)}, family=#{inspect(family)}"
+      )
+
+      result = :erl_epmd.register_node(name, port, :inet)
+      log("  → returned #{inspect(result)}")
+      result
+    end
+
+    def port_please(name, host) do
+      log("port_please/2 called with name=#{inspect(name)}, host=#{inspect(host)}")
+
+      result = :erl_epmd.port_please(name, host)
+      log("  → returned #{inspect(result)}")
+      result
+    end
+
+    def address_please(name, host, address_family) do
+      log(
+        "address_please/3 called with name=#{inspect(name)}, host=#{inspect(host)}, family=#{inspect(address_family)}"
+      )
+
+      result = :erl_epmd.address_please(name, host, address_family)
+      log("  → returned #{inspect(result)}")
+      result
+    end
+
+    def listen_port_please(name, host) do
+      log("listen_port_please/2 called with name=#{inspect(name)}, host=#{inspect(host)}")
+
+      result = :erl_epmd.listen_port_please(name, host)
+      log("  → returned #{inspect(result)}")
+      result
+    end
+
+    def names(host_name) do
+      log("names/1 called with name=#{inspect(host_name)}")
+
+      result = :erl_epmd.names(host_name)
+      log("  → returned #{inspect(result)}")
+      result
+    end
+  end
+
+# Write the compiled binary to disk so child nodes can use it
+File.write!(Path.join(dir, "Elixir.LoggingEPMD.beam"), binary)
+File.write!(log_file, "")
+
+IO.puts("LoggingEPMD compiled and written to #{dir}")
+```
+
+```elixir
+# Start Node A (regular EPMD) and Node B (LoggingEPMD), then cluster them
+dir = Path.join(System.tmp_dir!(), "custom_epmd_demo")
+log_file = Path.join(System.tmp_dir!(), "epmd_log.txt")
+File.write!(log_file, "")
+
+id = random_id.()
+cookie = "cookie_#{id}"
+
+# Node A: a regular Elixir node
+node_a =
+  Port.open(
+    {:spawn_executable, System.find_executable("elixir")},
+    [
+      :binary,
+      :stderr_to_stdout,
+      args: [
+        "--name",
+        "node_a_#{id}@127.0.0.1",
+        "--cookie",
+        cookie,
+        "-e",
+        "spawn(fn -> Process.sleep(3_600_000); System.halt(0) end); IO.read(:stdio, :eof)"
+      ]
+    ]
+  )
+
+# Wait until Node A is registered in EPMD
+wait_until.(fn ->
+  {:ok, names} = :net_adm.names()
+  Enum.any?(names, fn {name, _} -> to_string(name) =~ "node_a_#{id}" end)
+end) || raise("Node A failed to register with EPMD")
+
+# Node B: uses LoggingEPMD, connects to Node A
+{output, _} =
+  System.cmd(
+    "elixir",
+    [
+      "--erl",
+      "-epmd_module Elixir.LoggingEPMD -pa #{dir}",
+      "--name",
+      "node_b_#{id}@127.0.0.1",
+      "--cookie",
+      cookie,
+      "-e",
+      """
+      IO.inspect(Node.list(:connected), label: "Nodes connected to node B")
+
+      target = :"node_a_#{id}@127.0.0.1"
+      result = Node.connect(target)
+      IO.puts("> Node.connect(\#{inspect(target)})")
+      IO.puts("> \#{result}")
+
+      IO.inspect(Node.list(:connected), label: "Nodes connected to node B")
+      System.halt(0)
+      """
+    ],
+    stderr_to_stdout: true
+  )
+
+Port.close(node_a)
+
+IO.puts(output)
+IO.puts("=== EPMD functions that fired on Node B ===")
+IO.puts(File.read!(log_file))
+```

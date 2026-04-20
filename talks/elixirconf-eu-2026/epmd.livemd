@@ -1,0 +1,46 @@
+# Understanding EPMD
+
+## What is EPMD?
+
+EPMD (Erlang Port Mapper Daemon) is a small process that maps node names to ports.
+
+When a node starts, it picks a **random TCP port** for distribution,
+then tells EPMD: "I'm `foo`, I'm on port 54821."
+
+When another node wants to connect to `foo`, it asks EPMD: "what port is `foo` on?"
+
+Let's see it working.
+
+## See EPMD in action
+
+First, let's query EPMD to see who's registered right now:
+
+```elixir
+# Ask EPMD what nodes are registered on this machine
+# This is similar to running `epmd -names` in the terminal
+{:ok, names} = :net_adm.names()
+IO.puts("Nodes registered with EPMD:")
+
+for {name, port} <- names do
+  IO.puts("  #{name} → port #{port}")
+end
+```
+
+## How nodes find each other
+
+When you call `Node.connect(:"some_node@host")`, the BEAM needs to find out what port `some_node` is on. It calls the EPMD module's `port_please` function.
+
+Let's see what happens when we look up a node that exists vs one that doesn't:
+
+```elixir
+# Look up a node that IS registered with EPMD
+# Let's use "livebook" — the main Livebook node
+result = :erl_epmd.port_please(~c"livebook", ~c"localhost", 5000)
+IO.puts("Looking up node with name 'livebook': #{inspect(result)}")
+```
+
+```elixir
+# Look up a node that does NOT exist
+result = :erl_epmd.port_please(~c"i_dont_exist", ~c"localhost", 5000)
+IO.puts("Looking up node with name 'i_dont_exist': #{inspect(result)}")
+```

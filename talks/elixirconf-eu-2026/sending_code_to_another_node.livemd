@@ -1,0 +1,101 @@
+# Shipping code from one node to another
+
+```elixir
+random_id = fn -> :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower) end
+
+wait_until = fn check ->
+  Stream.repeatedly(fn ->
+    Process.sleep(100)
+    check.()
+  end)
+  |> Stream.take(30)
+  |> Enum.find(& &1)
+end
+```
+
+## The idea
+
+You can take a module compiled on one node and load it on another at runtime.
+
+## The plumbing
+
+Create a second node (`node_b@remote.host`) by spawning a plain Elixir node locally.
+
+Cluster the node of this notebook with that second node.
+
+```elixir
+id = random_id.()
+cookie = "cookie_#{id}"
+
+remote_port =
+  Port.open(
+    {:spawn_executable, System.find_executable("elixir")},
+    [:binary, :stderr_to_stdout,
+     args: ["--name", "node_b_#{id}@127.0.0.1", "--cookie", cookie,
+            "-e", "spawn(fn -> Process.sleep(3_600_000); System.halt(0) end); IO.read(:stdio, :eof)"]]
+  )
+
+wait_until.(fn ->
+  {:ok, names} = :net_adm.names()
+  Enum.any?(names, fn {name, _} -> to_string(name) =~ "node_b_#{id}" end)
+end) || raise("Remote node failed to start within 3s")
+
+other_node = :"node_b_#{id}@127.0.0.1"
+Node.set_cookie(other_node, :"#{cookie}")
+true = Node.connect(other_node)
+
+IO.puts("Connected to #{other_node}")
+```
+
+## The technique
+
+Define `MyModule` on this node:
+
+```elixir
+defmodule MyModule do
+  def say_hello do
+    "Hello from #{node()}!"
+  end
+end
+```
+
+It doesn't exist on `node_b` yet — calling it fails:
+
+```elixir
+:rpc.call(other_node, MyModule, :say_hello, [])
+```
+
+Grab the compiled bytecode:
+
+```elixir
+{_mod, binary, file} = :code.get_object_code(MyModule)
+IO.puts("#{file} — #{byte_size(binary)} bytes")
+```
+
+Ship it: load the bytecode into `node_b`'s code server:
+
+```elixir
+:rpc.call(other_node, :code, :load_binary, [MyModule, file, binary])
+```
+
+Now the call works: runs on `node_b`:
+
+```elixir
+:rpc.call(other_node, MyModule, :say_hello, [])
+```
+
+## The clean up
+
+`:code.delete/1` marks the current code as "old" (no new calls allowed);
+`:code.purge/1` removes it from memory.
+
+```elixir
+:rpc.call(other_node, :code, :delete, [MyModule])
+:rpc.call(other_node, :code, :purge, [MyModule])
+
+# Verify it's gone
+IO.puts("MyModule still loaded: #{:rpc.call(other_node, Code, :ensure_loaded?, [MyModule])}")
+
+# Stop the remote node
+Port.close(remote_port)
+```
